@@ -65,6 +65,7 @@ dev = [
     "flaky",
     "pytest-xdist",
     "pytest-playwright",
+    "coverage[toml]>=7.0",
 ]
 # tapeagents = [
 #     "tapeagents[converters]",
@@ -109,3 +110,27 @@ hint = [
 [project.scripts]
 agentlab-assistant = "agentlab.ui_assistant:main"
 agentlab-xray = "agentlab.analyze.agent_xray:main"
+
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "*/tests/*",
+    "*/test_*",
+    "setup.py",
+    "*/venv/*",
+    "*/.venv/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]
+show_missing = true
+precision = 2
+
+[tool.coverage.html]
+directory = "htmlcov"
