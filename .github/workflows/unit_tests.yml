@@ -67,9 +67,9 @@ jobs:
         env:
           MINIWOB_URL: "http://localhost:8080/miniwob/"
         run: |
-          uv run coverage run -m pytest -n 5 --durations=10 -m 'not pricy' -v tests/
-          uv run coverage report
-          uv run coverage html
+          uv run python -m coverage run -m pytest -n 5 --durations=10 -m 'not pricy' -v tests/
+          uv run python -m coverage report
+          uv run python -m coverage html
 
       - name: Upload Coverage Reports
         uses: actions/upload-artifact@v4
