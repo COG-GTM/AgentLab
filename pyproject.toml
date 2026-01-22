@@ -62,6 +62,7 @@ dev = [
     "blacken-docs",
     "pre-commit",
     "pytest==7.3.2",
+    "pytest-cov>=4.0.0",
     "flaky",
     "pytest-xdist",
     "pytest-playwright",
@@ -109,3 +110,22 @@ hint = [
 [project.scripts]
 agentlab-assistant = "agentlab.ui_assistant:main"
 agentlab-xray = "agentlab.analyze.agent_xray:main"
+
+[tool.coverage.run]
+source = ["src/agentlab"]
+omit = ["*/tests/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod"
+]
+fail_under = 70
