@@ -25,7 +25,13 @@ run-tests:
 	@MINIWOB_URL="http://localhost:8080/miniwob/" pytest -n 5 --durations=10 -m 'not pricy' tests/
 	@echo "Tests completed"
 
+run-tests-coverage:
+	@MINIWOB_URL="http://localhost:8080/miniwob/" pytest -n 5 --durations=10 -m 'not pricy' --cov=src/agentlab --cov-report=html --cov-report=term-missing tests/
+	@echo "Tests with coverage completed"
+	@echo "Coverage report available at htmlcov/index.html"
+
 test: setup miniwob check-miniwob run-tests stop-miniwob
+test-coverage: setup miniwob check-miniwob run-tests-coverage stop-miniwob
 
 lint: setup
 	@black src/ --check --diff

@@ -63,7 +63,15 @@ jobs:
       - name: Pre-download nltk ressources
         run: uv run python -c "import nltk; nltk.download('punkt_tab')"
 
-      - name: Run AgentLab Unit Tests
+      - name: Run AgentLab Unit Tests with Coverage
         env:
           MINIWOB_URL: "http://localhost:8080/miniwob/"
-        run: uv run pytest -n 5 --durations=10 -m 'not pricy' -v tests/
+        run: uv run pytest -n 5 --durations=10 -m 'not pricy' --cov=src/agentlab --cov-report=xml --cov-report=html --cov-report=term-missing -v tests/
+
+      - name: Upload Coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
