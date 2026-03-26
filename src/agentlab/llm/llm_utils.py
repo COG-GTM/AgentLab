@@ -256,7 +256,9 @@ def generic_call_api_with_retries(
     raise RuntimeError(f"API call failed after {max_retries} retries.")
 
 
-def call_openai_api_with_retries(client_function, api_params, max_retries=10, stats=None):
+def call_openai_api_with_retries(
+    client_function, api_params, max_retries=10, stats=None, initial_retry_delay_seconds=20
+):
     """
     Makes an OpenAI API call with retries for transient failures,
     rate limiting, and invalid or error-containing responses.
@@ -267,6 +269,7 @@ def call_openai_api_with_retries(client_function, api_params, max_retries=10, st
         api_params: Parameters to pass to the client function.
         max_retries: Maximum number of retry attempts.
         stats: Optional dict populated with retry statistics.
+        initial_retry_delay_seconds: Initial delay between retries in seconds.
 
     Returns:
         The OpenAI API response if successful.
@@ -303,6 +306,7 @@ def call_openai_api_with_retries(client_function, api_params, max_retries=10, st
         get_status_code_fn=get_openai_status_code,
         max_retries=max_retries,
         stats=stats,
+        initial_retry_delay_seconds=initial_retry_delay_seconds,
     )
 
 

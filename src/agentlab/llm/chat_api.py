@@ -266,6 +266,7 @@ class ChatModel(AbstractChatModel):
             api_params,
             max_retries=self.max_retry,
             stats=retry_stats,
+            initial_retry_delay_seconds=self.min_retry_wait_time,
         )
         self.retries = retry_stats.get("attempts", 1)
 
@@ -488,7 +489,9 @@ class AnthropicChatModel(AbstractChatModel):
         )
 
         # Track usage if available
-        if hasattr(tracking.TRACKER, "instance"):
+        if hasattr(tracking.TRACKER, "instance") and isinstance(
+            tracking.TRACKER.instance, tracking.LLMTracker
+        ):
             tracking.TRACKER.instance(
                 response.usage.input_tokens,
                 response.usage.output_tokens,
