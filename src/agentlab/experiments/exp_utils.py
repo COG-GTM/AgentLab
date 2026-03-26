@@ -16,7 +16,17 @@ logger = logging.getLogger(__name__)  # Get logger based on module name
 # TODO move this to a more appropriate place
 RESULTS_DIR = os.environ.get("AGENTLAB_EXP_ROOT", None)
 if RESULTS_DIR is None:
-    RESULTS_DIR = os.environ.get("UI_COPILOT_RESULTS_DIR", None)
+    _legacy_dir = os.environ.get("UI_COPILOT_RESULTS_DIR", None)
+    if _legacy_dir is not None:
+        import warnings
+
+        warnings.warn(
+            "UI_COPILOT_RESULTS_DIR is deprecated. Use AGENTLAB_EXP_ROOT instead. "
+            "Support for UI_COPILOT_RESULTS_DIR will be removed in a future version.",
+            DeprecationWarning,
+            stacklevel=1,
+        )
+        RESULTS_DIR = _legacy_dir
 if RESULTS_DIR is None:
     logging.info("$AGENTLAB_EXP_ROOT is not defined, Using $HOME/agentlab_results.")
     RESULTS_DIR = Path.home() / "agentlab_results"

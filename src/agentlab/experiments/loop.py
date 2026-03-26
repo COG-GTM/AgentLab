@@ -49,6 +49,10 @@ class EnvArgs(DataClassJsonMixin):
     storage_state: Optional[str | Path | dict] = None
     task_kwargs: Optional[dict] = None  # use default value from BrowserGym
     pre_observation_delay: float = None  # seconds, wait for JS events to be fired
+    pre_env_setup_hooks: Optional[list] = field(
+        default=None,
+        metadata={"dataclasses_json": {"exclude": lambda x: True}},
+    )
 
     def make_env(
         self, action_mapping, exp_dir, exp_task_kwargs: dict = {}, use_raw_page_output=True
@@ -81,12 +85,10 @@ class EnvArgs(DataClassJsonMixin):
         if exp_task_kwargs:
             extra_kwargs["task_kwargs"] = extra_kwargs.get("task_kwargs", {}) | exp_task_kwargs
 
-        # assistantbench hack, write the task output (agent prediction) to a file in the experiment's directory
-        # TODO: find a better way to deal with this
-        if self.task_name.startswith("assistantbench.test"):
-            extra_kwargs["task_kwargs"] = extra_kwargs.get("task_kwargs", {}) | {
-                "output_file": exp_dir / "assistantbench-prediction.json"
-            }
+        # Run any registered pre-env-setup hooks (e.g. benchmark-specific config)
+        if self.pre_env_setup_hooks:
+            for hook in self.pre_env_setup_hooks:
+                extra_kwargs = hook(self, extra_kwargs, exp_dir)
 
         return gym.make(
             _get_env_name(self.task_name),
