@@ -14,7 +14,12 @@ from openai import NOT_GIVEN, OpenAI
 import agentlab.llm.tracking as tracking
 from agentlab.llm.base_api import AbstractChatModel, BaseModelArgs
 from agentlab.llm.huggingface_utils import HFBaseChatModel
-from agentlab.llm.llm_utils import AIMessage, Discussion
+from agentlab.llm.llm_utils import (
+    AIMessage,
+    Discussion,
+    call_anthropic_api_with_retries,
+    call_openai_api_with_retries,
+)
 
 
 def make_system_message(content: str) -> dict:
@@ -160,39 +165,6 @@ class SelfHostedModelArgs(BaseModelArgs):
             raise ValueError(f"Backend {self.backend} is not supported")
 
 
-@dataclass
-class ChatModelArgs(BaseModelArgs):
-    """Object added for backward compatibility with the old ChatModelArgs."""
-
-    model_path: str = None
-    model_url: str = None
-    model_size: str = None
-    training_total_tokens: int = None
-    hf_hosted: bool = False
-    is_model_operational: str = False
-    sliding_window: bool = False
-    n_retry_server: int = 4
-    infer_tokens_length: bool = False
-    vision_support: bool = False
-    shard_support: bool = True
-    extra_tgi_args: dict = None
-    tgi_image: str = None
-    info: dict = None
-
-    def __post_init__(self):
-        import warnings
-
-        warnings.simplefilter("always", DeprecationWarning)
-        warnings.warn(
-            "ChatModelArgs is deprecated and used only for xray. Use one of the specific model args classes instead.",
-            DeprecationWarning,
-        )
-        warnings.simplefilter("default", DeprecationWarning)
-
-    def make_model(self):
-        pass
-
-
 def _extract_wait_time(error_message, min_retry_wait_time=60):
     """Extract the wait time from an OpenAI RateLimitError message."""
     match = re.search(r"try again in (\d+(\.\d+)?)s", error_message)
@@ -277,42 +249,21 @@ class ChatModel(AbstractChatModel):
         )
 
     def __call__(self, messages: list[dict], n_samples: int = 1, temperature: float = None) -> dict:
-        # Initialize retry tracking attributes
-        self.retries = 0
-        self.success = False
-        self.error_types = []
+        temperature = temperature if temperature is not None else self.temperature
+        api_params = {
+            "model": self.model_name,
+            "messages": messages,
+            "n": n_samples,
+            "temperature": temperature,
+            "max_completion_tokens": self.max_tokens,
+            "logprobs": self.log_probs,
+        }
 
-        completion = None
-        e = None
-        for itr in range(self.max_retry):
-            self.retries += 1
-            temperature = temperature if temperature is not None else self.temperature
-            try:
-                completion = self.client.chat.completions.create(
-                    model=self.model_name,
-                    messages=messages,
-                    n=n_samples,
-                    temperature=temperature,
-                    max_completion_tokens=self.max_tokens,
-                    logprobs=self.log_probs,
-                )
-
-                if completion.usage is None:
-                    raise OpenRouterError(
-                        "The completion object does not contain usage information. This is likely a bug in the OpenRouter API."
-                    )
-
-                self.success = True
-                break
-            except openai.OpenAIError as e:
-                error_type = handle_error(e, itr, self.min_retry_wait_time, self.max_retry)
-                self.error_types.append(error_type)
-
-        if not completion:
-            raise RetryError(
-                f"Failed to get a response from the API after {self.max_retry} retries\n"
-                f"Last error: {error_type}"
-            )
+        completion = call_openai_api_with_retries(
+            self.client.chat.completions.create,
+            api_params,
+            max_retries=self.max_retry,
+        )
 
         input_tokens = completion.usage.prompt_tokens
         output_tokens = completion.usage.completion_tokens
@@ -516,35 +467,31 @@ class AnthropicChatModel(AbstractChatModel):
 
         temperature = temperature if temperature is not None else self.temperature
 
-        for attempt in range(self.max_retry):
-            try:
-                kwargs = {
-                    "model": self.model_name,
-                    "messages": anthropic_messages,
-                    "max_tokens": self.max_tokens,
-                    "temperature": temperature,
-                }
+        api_params = {
+            "model": self.model_name,
+            "messages": anthropic_messages,
+            "max_tokens": self.max_tokens,
+            "temperature": temperature,
+        }
 
-                if system_message:
-                    kwargs["system"] = system_message
+        if system_message:
+            api_params["system"] = system_message
 
-                response = self.client.messages.create(**kwargs)
+        response = call_anthropic_api_with_retries(
+            self.client.messages.create,
+            api_params,
+            max_retries=self.max_retry,
+        )
 
-                # Track usage if available
-                if hasattr(tracking.TRACKER, "instance"):
-                    tracking.TRACKER.instance(
-                        response.usage.input_tokens,
-                        response.usage.output_tokens,
-                        0,  # cost calculation would need pricing info
-                    )
+        # Track usage if available
+        if hasattr(tracking.TRACKER, "instance"):
+            tracking.TRACKER.instance(
+                response.usage.input_tokens,
+                response.usage.output_tokens,
+                0,  # cost calculation would need pricing info
+            )
 
-                return AIMessage(response.content[0].text)
-
-            except Exception as e:
-                if attempt == self.max_retry - 1:
-                    raise e
-                logging.warning(f"Anthropic API error (attempt {attempt + 1}): {e}")
-                time.sleep(60)  # Simple retry delay
+        return AIMessage(response.content[0].text)
 
 
 @dataclass
