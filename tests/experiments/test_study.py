@@ -49,7 +49,7 @@ def manual_test_launch_parallel_study_webarena():
     study.run(n_jobs=4, parallel_backend="ray", n_relaunch=1)
 
 
-@pytest.mark.skip(reason="This usecase isnt relevant atm")
+@pytest.mark.pricy
 def test_launch_parallel_study():
     agent_args_list = _make_agent_args_list()
 

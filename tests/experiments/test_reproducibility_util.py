@@ -39,65 +39,32 @@ def test_get_reproducibility_info(benchmark_name):
     assert "browsergym__local_modifications" in info
 
 
-# def test_save_reproducibility_info():
-#     with tempfile.TemporaryDirectory() as tmp_dir:
-#         tmp_dir = Path(tmp_dir)
+def test_get_reproducibility_info_and_assert_compatible():
+    """Test get_reproducibility_info + assert_compatible (replaces old save_reproducibility_info test).
 
-#         info1 = reproducibility_util.save_reproducibility_info(
-#             study_dir=tmp_dir,
-#             info=reproducibility_util.get_reproducibility_info(
-#                 agents_args="GenericAgent",
-#                 benchmark_name="miniwob",
-#                 ignore_changes=True,
-#             ),
-#         )
-#         time.sleep(1)  # make sure the date changes by at least 1s
+    The original test used save_reproducibility_info/load_reproducibility_info which no longer
+    exist. This test exercises the current API: get_reproducibility_info and assert_compatible.
+    """
+    benchmark = DEFAULT_BENCHMARKS["miniwob"]()
 
-#         # this should overwrite the previous info since they are the same beside
-#         # the date
-#         info2 = reproducibility_util.save_reproducibility_info(
-#             study_dir=tmp_dir,
-#             info=reproducibility_util.get_reproducibility_info(
-#                 agents_args="GenericAgent",
-#                 benchmark_name="miniwob",
-#                 ignore_changes=True,
-#             ),
-#         )
+    info1 = reproducibility_util.get_reproducibility_info(
+        "GenericAgent", benchmark, "test_id", ignore_changes=True
+    )
+    time.sleep(1)  # make sure the date changes by at least 1s
 
-#         reproducibility_util.assert_compatible(info1, info2)
+    info2 = reproducibility_util.get_reproducibility_info(
+        "GenericAgent", benchmark, "test_id", ignore_changes=True
+    )
 
-#         # this should not overwrite info2 as the agent name is different, it
-#         # should raise an error
-#         with pytest.raises(ValueError):
-#             reproducibility_util.save_reproducibility_info(
-#                 study_dir=tmp_dir,
-#                 info=reproducibility_util.get_reproducibility_info(
-#                     agents_args="GenericAgent_alt",
-#                     benchmark_name="miniwob",
-#                     ignore_changes=True,
-#                 ),
-#             )
+    # Compatible infos should not raise
+    reproducibility_util.assert_compatible(info1, info2)
 
-#         # load json
-#         info3 = reproducibility_util.load_reproducibility_info(tmp_dir)
-
-#         assert info2 == info3
-#         assert info1 != info3
-
-#         test_study_dir = Path(__file__).parent.parent / "data" / "test_study"
-#         result_df = inspect_results.load_result_df(test_study_dir, progress_fn=None)
-#         report_df = inspect_results.summarize_study(result_df)
-
-#         with pytest.raises(ValueError):
-#             reproducibility_util.append_to_journal(
-#                 info3, report_df, journal_path=tmp_dir / "journal.csv"
-#             )
-
-#         reproducibility_util.append_to_journal(
-#             info3, report_df, journal_path=tmp_dir / "journal.csv", strict_reproducibility=False
-#         )
-
-#         print((tmp_dir / "journal.csv").read_text())
+    # Different agent name should raise
+    info3 = reproducibility_util.get_reproducibility_info(
+        "GenericAgent_alt", benchmark, "test_id", ignore_changes=True
+    )
+    with pytest.raises(ValueError):
+        reproducibility_util.assert_compatible(info1, info3)
 
 
 if __name__ == "__main__":

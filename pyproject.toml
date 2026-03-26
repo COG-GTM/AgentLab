@@ -65,6 +65,7 @@ dev = [
     "flaky",
     "pytest-xdist",
     "pytest-playwright",
+    "pytest-cov",
 ]
 # tapeagents = [
 #     "tapeagents[converters]",

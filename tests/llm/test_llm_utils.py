@@ -126,47 +126,52 @@ def mock_rate_limit_error(message: str, status_code: Literal[429] = 429) -> Rate
     return RateLimitError(message, response=mock_response, body=mock_response.json())
 
 
-# Test to ensure function stops retrying after reaching the max wait time
-# def test_rate_limit_max_wait_time():
-#     mock_chat = MockChatOpenAI()
-#     mock_chat.call = Mock(
-#         side_effect=mock_rate_limit_error("Rate limit reached. Please try again in 2s.")
-#     )
-
-#     with pytest.raises(RateLimitError):
-#         llm_utils.retry(
-#             mock_chat,
-#             [],
-#             n_retry=4,
-#             parser=mock_parser,
-#             rate_limit_max_wait_time=6,
-#             min_retry_wait_time=1,
-#         )
-
-#     # The function should stop retrying after 2 attempts (6s each time, 12s total which is greater than the 10s max wait time)
-#     assert mock_chat.call.call_count == 3
+# NOTE: test_rate_limit_max_wait_time and test_rate_limit_success were commented out
+# because the retry() function signature changed — it no longer accepts
+# rate_limit_max_wait_time or min_retry_wait_time parameters.
+# The tests below exercise rate-limit behavior with the current API.
 
 
-# def test_rate_limit_success():
-#     mock_chat = MockChatOpenAI()
-#     mock_chat.call = Mock(
-#         side_effect=[
-#             mock_rate_limit_error("Rate limit reached. Please try again in 2s."),
-#             make_system_message("correct content"),
-#         ]
-#     )
+def test_rate_limit_raises_on_persistent_error():
+    """Test that RateLimitError propagates when the chat always raises."""
+    mock_chat = MockChatOpenAI()
+    mock_chat.call = Mock(
+        side_effect=mock_rate_limit_error("Rate limit reached. Please try again in 2s.")
+    )
 
-#     result = llm_utils.retry(
-#         mock_chat,
-#         [],
-#         n_retry=4,
-#         parser=mock_parser,
-#         rate_limit_max_wait_time=6,
-#         min_retry_wait_time=1,
-#     )
+    with pytest.raises(RateLimitError):
+        llm_utils.retry(
+            mock_chat,
+            llm_utils.Discussion(),
+            n_retry=2,
+            parser=mock_parser,
+        )
 
-#     assert result == "Parsed value"
-#     assert mock_chat.call.call_count == 2
+
+def test_rate_limit_propagates_immediately():
+    """Test that a RateLimitError from the chat model propagates on the first call.
+
+    The retry() function only retries on ParseError; other exceptions (including
+    RateLimitError) are not caught and propagate immediately.
+    """
+    mock_chat = MockChatOpenAI()
+    mock_chat.call = Mock(
+        side_effect=[
+            mock_rate_limit_error("Rate limit reached. Please try again in 2s."),
+            make_system_message("correct content"),  # would succeed, but never reached
+        ]
+    )
+
+    with pytest.raises(RateLimitError):
+        llm_utils.retry(
+            mock_chat,
+            llm_utils.Discussion(),
+            n_retry=4,
+            parser=mock_parser,
+        )
+
+    # Only one call should have been made before the error propagated
+    assert mock_chat.call.call_count == 1
 
 
 # Mock a successful parser response to test function exit before max retries

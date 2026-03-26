@@ -1,5 +1,6 @@
 from copy import deepcopy
 
+import numpy as np
 import bgym
 import pytest
 from bgym import HighLevelActionSet, HighLevelActionSetArgs
@@ -194,7 +195,10 @@ def test_shrinking_observation():
 def test_main_prompt_elements_gone_one_at_a_time(flag_name: str, expected_prompts):
 
     if flag_name in ["use_thinking", "obs.use_action_history"]:
-        return  # TODO design new tests for those two flags
+        # These flags interact with history flags (use_think_history, use_action_history).
+        # Disabling use_thinking alone doesn't remove <think> from history when
+        # use_think_history is still True. Dedicated tests below cover these cases.
+        return
 
     # Disable the flag
     flags = deepcopy(ALL_TRUE_FLAGS)
@@ -249,6 +253,143 @@ def test_main_prompt_elements_present():
     for _, expected_prompts in FLAG_EXPECTED_PROMPT:
         for expected in expected_prompts:
             assert expected in prompt
+
+
+def _make_screenshot_obs():
+    """Return a copy of base_obs with a mock screenshot (numpy array)."""
+    obs = base_obs.copy()
+    obs["screenshot"] = np.zeros((64, 64, 3), dtype=np.uint8)
+    obs["screenshot_som"] = np.zeros((64, 64, 3), dtype=np.uint8)
+    return obs
+
+
+def test_use_screenshot_adds_image():
+    """When use_screenshot=True the prompt should contain a Screenshot section."""
+    flags = deepcopy(ALL_TRUE_FLAGS)
+    flags.obs.use_screenshot = True
+    flags.obs.use_som = False
+
+    obs_with_screenshot = _make_screenshot_obs()
+    obs_history = [
+        obs_with_screenshot | {"pruned_html": html_template.format(1), "last_action_error": ""},
+        obs_with_screenshot | {"pruned_html": html_template.format(2), "last_action_error": ""},
+        obs_with_screenshot | {"pruned_html": html_template.format(3), "last_action_error": ""},
+    ]
+
+    prompt_maker = MainPrompt(
+        action_set=flags.action.action_set.make_action_set(),
+        obs_history=obs_history,
+        actions=ACTIONS,
+        memories=MEMORIES,
+        thoughts=THOUGHTS,
+        previous_plan="1- think\n2- do it",
+        step=2,
+        flags=flags,
+    )
+    prompt = prompt_maker.prompt
+    prompt_str = prompt.__str__(warn_if_image=False)
+    assert "Screenshot" in prompt_str
+
+
+def test_use_som_adds_annotated_screenshot():
+    """When use_som=True the screenshot section should mention bounding boxes."""
+    flags = deepcopy(ALL_TRUE_FLAGS)
+    flags.obs.use_screenshot = True
+    flags.obs.use_som = True
+
+    obs_with_screenshot = _make_screenshot_obs()
+    obs_history = [
+        obs_with_screenshot | {"pruned_html": html_template.format(1), "last_action_error": ""},
+        obs_with_screenshot | {"pruned_html": html_template.format(2), "last_action_error": ""},
+        obs_with_screenshot | {"pruned_html": html_template.format(3), "last_action_error": ""},
+    ]
+
+    prompt_maker = MainPrompt(
+        action_set=flags.action.action_set.make_action_set(),
+        obs_history=obs_history,
+        actions=ACTIONS,
+        memories=MEMORIES,
+        thoughts=THOUGHTS,
+        previous_plan="1- think\n2- do it",
+        step=2,
+        flags=flags,
+    )
+    prompt = prompt_maker.prompt
+    prompt_str = prompt.__str__(warn_if_image=False)
+    assert "bounding boxes" in prompt_str
+
+
+def test_enable_chat_uses_chat_instructions():
+    """When enable_chat=True the prompt should use ChatInstructions (UI Assistant)."""
+    import time as _time
+
+    flags = deepcopy(ALL_TRUE_FLAGS)
+    flags.enable_chat = True
+
+    # ChatInstructions requires 'timestamp' in chat_messages
+    chat_obs = deepcopy(OBS_HISTORY)
+    for obs in chat_obs:
+        for msg in obs["chat_messages"]:
+            msg["timestamp"] = _time.time()
+
+    prompt_maker = MainPrompt(
+        action_set=flags.action.action_set.make_action_set(),
+        obs_history=chat_obs,
+        actions=ACTIONS,
+        memories=MEMORIES,
+        thoughts=THOUGHTS,
+        previous_plan="1- think\n2- do it",
+        step=2,
+        flags=flags,
+    )
+    prompt_str = str(prompt_maker.prompt)
+    assert "UI Assistant" in prompt_str
+
+
+def test_use_thinking_disabled_removes_think_tags():
+    """When use_thinking=False and use_think_history=False the prompt has no <think> tags."""
+    flags = deepcopy(ALL_TRUE_FLAGS)
+    flags.use_thinking = False
+    flags.obs.use_think_history = False
+
+    prompt_str = str(
+        MainPrompt(
+            action_set=flags.action.action_set.make_action_set(),
+            obs_history=OBS_HISTORY,
+            actions=ACTIONS,
+            memories=MEMORIES,
+            thoughts=THOUGHTS,
+            previous_plan="1- think\n2- do it",
+            step=2,
+            flags=flags,
+        ).prompt
+    )
+    assert "<think>" not in prompt_str
+    assert "</think>" not in prompt_str
+
+
+def test_use_action_history_disabled_removes_action_tags():
+    """When obs.use_action_history=False the history should not contain <action> tags."""
+    flags = deepcopy(ALL_TRUE_FLAGS)
+    flags.obs.use_action_history = False
+    # Also disable the action in concrete/abstract examples which may contain action tags
+    flags.use_concrete_example = False
+    flags.use_abstract_example = False
+
+    prompt_str = str(
+        MainPrompt(
+            action_set=flags.action.action_set.make_action_set(),
+            obs_history=OBS_HISTORY,
+            actions=ACTIONS,
+            memories=MEMORIES,
+            thoughts=THOUGHTS,
+            previous_plan="1- think\n2- do it",
+            step=2,
+            flags=flags,
+        ).prompt
+    )
+    assert "<action>" not in prompt_str
+    assert "click('41')" not in prompt_str
 
 
 if __name__ == "__main__":
