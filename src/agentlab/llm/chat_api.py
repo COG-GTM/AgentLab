@@ -247,8 +247,6 @@ class ChatModel(AbstractChatModel):
             api_key=api_key,
             **client_args,
         )
-        # Initialize retry tracking (updated by shared retry helper is not possible,
-        # so we keep a default value for backward compatibility with get_stats())
         self.retries = 0
 
     def __call__(self, messages: list[dict], n_samples: int = 1, temperature: float = None) -> dict:
@@ -262,11 +260,14 @@ class ChatModel(AbstractChatModel):
             "logprobs": self.log_probs,
         }
 
+        retry_stats = {}
         completion = call_openai_api_with_retries(
             self.client.chat.completions.create,
             api_params,
             max_retries=self.max_retry,
+            stats=retry_stats,
         )
+        self.retries = retry_stats.get("attempts", 1)
 
         input_tokens = completion.usage.prompt_tokens
         output_tokens = completion.usage.completion_tokens
