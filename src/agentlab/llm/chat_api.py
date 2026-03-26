@@ -247,6 +247,9 @@ class ChatModel(AbstractChatModel):
             api_key=api_key,
             **client_args,
         )
+        # Initialize retry tracking (updated by shared retry helper is not possible,
+        # so we keep a default value for backward compatibility with get_stats())
+        self.retries = 0
 
     def __call__(self, messages: list[dict], n_samples: int = 1, temperature: float = None) -> dict:
         temperature = temperature if temperature is not None else self.temperature

@@ -90,6 +90,13 @@ class EnvArgs(DataClassJsonMixin):
             for hook in self.pre_env_setup_hooks:
                 extra_kwargs = hook(self, extra_kwargs, exp_dir)
 
+        # assistantbench hack, write the task output (agent prediction) to a file in the experiment's directory
+        # TODO: migrate this to a pre_env_setup_hook registered in the AssistantBench benchmark module
+        if self.task_name.startswith("assistantbench.test"):
+            extra_kwargs["task_kwargs"] = extra_kwargs.get("task_kwargs", {}) | {
+                "output_file": exp_dir / "assistantbench-prediction.json"
+            }
+
         return gym.make(
             _get_env_name(self.task_name),
             disable_env_checker=True,
