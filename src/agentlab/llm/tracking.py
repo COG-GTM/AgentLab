@@ -96,7 +96,7 @@ def get_pricing(model_name: str, provider: str) -> dict:
         provider: One of 'openai', 'anthropic', 'openrouter', 'litellm'.
 
     Returns:
-        A dict mapping model names to {"prompt": float, "completion": float} pricing info.
+        dict: Pricing information from the specified provider.
     """
     pricing_fn_map = {
         "openai": _get_pricing_openai,
@@ -118,6 +118,9 @@ def get_pricing_openrouter():
     """Returns a dictionary of model pricing for OpenRouter models.
 
     .. deprecated:: Use get_pricing(model_name, 'openrouter') instead.
+
+    Returns:
+        dict: Pricing information for OpenRouter models.
     """
     return _get_pricing_openrouter()
 
@@ -126,6 +129,9 @@ def get_pricing_openai():
     """Returns a dictionary of model pricing for OpenAI models.
 
     .. deprecated:: Use get_pricing(model_name, 'openai') instead.
+
+    Returns:
+        dict: Pricing information for OpenAI models.
     """
     return _get_pricing_openai()
 
@@ -134,6 +140,9 @@ def get_pricing_anthropic():
     """Returns a dictionary of model pricing for Anthropic models.
 
     .. deprecated:: Use get_pricing(model_name, 'anthropic') instead.
+
+    Returns:
+        dict: Pricing information for Anthropic models.
     """
     return _get_pricing_anthropic()
 
@@ -142,6 +151,12 @@ def get_pricing_litellm(model_name):
     """Returns a dictionary of model pricing for a LiteLLM model.
 
     .. deprecated:: Use get_pricing(model_name, 'litellm') instead.
+
+    Args:
+        model_name: The model name to look up pricing for.
+
+    Returns:
+        dict: Pricing information for the specified LiteLLM model.
     """
     return _get_pricing_litellm(model_name)
 
