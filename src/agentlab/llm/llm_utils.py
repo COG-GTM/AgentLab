@@ -49,7 +49,10 @@ def messages_to_dict(messages: list[dict] | list[LangchainBaseMessage]) -> dict:
         elif isinstance(m, str):
             new_messages.add_message({"role": "<unknown role>", "content": m})
         elif LangchainBaseMessage is not None and isinstance(m, LangchainBaseMessage):
-            new_messages.add_message(convert_message_to_dict(m))
+            if convert_message_to_dict is not None:
+                new_messages.add_message(convert_message_to_dict(m))
+            else:
+                new_messages.add_message({"role": "user", "content": str(m.content)})
         else:
             raise ValueError(f"Unknown message type: {type(m)}")
     return new_messages
