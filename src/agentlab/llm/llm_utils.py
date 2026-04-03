@@ -52,7 +52,10 @@ def messages_to_dict(messages: list[dict] | list[LangchainBaseMessage]) -> dict:
             if convert_message_to_dict is not None:
                 new_messages.add_message(convert_message_to_dict(m))
             else:
-                new_messages.add_message({"role": "user", "content": str(m.content)})
+                role_map = {"human": "user", "ai": "assistant", "system": "system"}
+                new_messages.add_message(
+                    {"role": role_map.get(m.type, m.type), "content": str(m.content)}
+                )
         else:
             raise ValueError(f"Unknown message type: {type(m)}")
     return new_messages
