@@ -63,7 +63,16 @@ jobs:
       - name: Pre-download nltk ressources
         run: uv run python -c "import nltk; nltk.download('punkt_tab')"
 
-      - name: Run AgentLab Unit Tests
+      - name: Run AgentLab Unit Tests with Coverage
         env:
           MINIWOB_URL: "http://localhost:8080/miniwob/"
-        run: uv run pytest -n 5 --durations=10 -m 'not pricy' -v tests/
+        run: |
+          uv run python -m coverage run -m pytest -n 5 --durations=10 -m 'not pricy' -v tests/
+          uv run python -m coverage report
+          uv run python -m coverage html
+
+      - name: Upload Coverage Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: htmlcov/

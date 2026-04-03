@@ -25,6 +25,14 @@ run-tests:
 	@MINIWOB_URL="http://localhost:8080/miniwob/" pytest -n 5 --durations=10 -m 'not pricy' tests/
 	@echo "Tests completed"
 
+run-coverage:
+	@MINIWOB_URL="http://localhost:8080/miniwob/" coverage run -m pytest -n 5 --durations=10 -m 'not pricy' tests/
+	@coverage report
+	@coverage html
+	@echo "Coverage completed - see htmlcov/index.html"
+
+test-coverage: setup miniwob check-miniwob run-coverage stop-miniwob
+
 test: setup miniwob check-miniwob run-tests stop-miniwob
 
 lint: setup
