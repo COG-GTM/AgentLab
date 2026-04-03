@@ -66,4 +66,4 @@ jobs:
       - name: Run AgentLab Unit Tests
         env:
           MINIWOB_URL: "http://localhost:8080/miniwob/"
-        run: uv run pytest -n 5 --durations=10 -m 'not pricy' -v tests/
+        run: uv run pytest -n 5 --durations=10 -m 'not pricy' -v --cov=src/agentlab --cov-report=term-missing tests/
