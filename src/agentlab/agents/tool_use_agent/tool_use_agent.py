@@ -6,8 +6,8 @@ import random
 import time
 from abc import ABC, abstractmethod
 from collections import defaultdict
-from copy import copy
-from dataclasses import asdict, dataclass, field
+from copy import copy, deepcopy
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
@@ -51,14 +51,16 @@ class Block(ABC):
         pass
 
     def make(self) -> "Block":
-        """Returns a copy so the init can start adding some stuff to `self` without changing the
-        original datatclass that should only contain a config.
-        The aim is avoid having 2 calss definition for each block, e.g. Block and BlockArgs.
+        """Returns a deep copy so the init can start adding some stuff to `self` without
+        changing the original dataclass that should only contain a config.
+        The aim is to avoid having 2 class definitions for each block, e.g. Block and BlockArgs.
+
+        Uses copy.deepcopy instead of asdict to safely handle non-serializable fields.
 
         Returns:
             Block: A copy of the current block instance with initialization applied.
         """
-        block = self.__class__(**asdict(self))
+        block = deepcopy(self)
         block._init()
         return block
 

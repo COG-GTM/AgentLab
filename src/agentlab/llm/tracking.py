@@ -92,8 +92,81 @@ def cost_tracker_decorator(get_action, suffix=""):
     return wrapper
 
 
-@cache
+def get_pricing(model_name: str, provider: str) -> dict:
+    """Unified pricing lookup that dispatches to the appropriate provider-specific function.
+
+    Args:
+        model_name: The model name to look up pricing for.
+        provider: One of 'openai', 'anthropic', 'openrouter', 'litellm'.
+
+    Returns:
+        dict: Pricing information from the specified provider.
+    """
+    pricing_fn_map = {
+        "openai": _get_pricing_openai,
+        "anthropic": _get_pricing_anthropic,
+        "openrouter": _get_pricing_openrouter,
+        "litellm": partial(_get_pricing_litellm, model_name=model_name),
+    }
+    pricing_fn = pricing_fn_map.get(provider)
+    if pricing_fn is None:
+        logging.warning(
+            f"Unsupported provider: {provider}. Supported providers are: {list(pricing_fn_map.keys())}"
+        )
+        return {}
+    return pricing_fn()
+
+
+# Keep the public aliases for backward compatibility
 def get_pricing_openrouter():
+    """Returns a dictionary of model pricing for OpenRouter models.
+
+    .. deprecated:: Use get_pricing(model_name, 'openrouter') instead.
+
+    Returns:
+        dict: Pricing information for OpenRouter models.
+    """
+    return _get_pricing_openrouter()
+
+
+def get_pricing_openai():
+    """Returns a dictionary of model pricing for OpenAI models.
+
+    .. deprecated:: Use get_pricing(model_name, 'openai') instead.
+
+    Returns:
+        dict: Pricing information for OpenAI models.
+    """
+    return _get_pricing_openai()
+
+
+def get_pricing_anthropic():
+    """Returns a dictionary of model pricing for Anthropic models.
+
+    .. deprecated:: Use get_pricing(model_name, 'anthropic') instead.
+
+    Returns:
+        dict: Pricing information for Anthropic models.
+    """
+    return _get_pricing_anthropic()
+
+
+def get_pricing_litellm(model_name):
+    """Returns a dictionary of model pricing for a LiteLLM model.
+
+    .. deprecated:: Use get_pricing(model_name, 'litellm') instead.
+
+    Args:
+        model_name: The model name to look up pricing for.
+
+    Returns:
+        dict: Pricing information for the specified LiteLLM model.
+    """
+    return _get_pricing_litellm(model_name)
+
+
+@cache
+def _get_pricing_openrouter():
     """Returns a dictionary of model pricing for OpenRouter models."""
     api_key = os.getenv("OPENROUTER_API_KEY")
     assert api_key, "OpenRouter API key is required"
@@ -112,7 +185,7 @@ def get_pricing_openrouter():
     }
 
 
-def get_pricing_openai():
+def _get_pricing_openai():
     """Returns a dictionary of model pricing for OpenAI models."""
     try:
         cost_dict = openai_info.MODEL_COST_PER_1K_TOKENS
@@ -142,7 +215,7 @@ def _remove_version_suffix(model_name):
     return re.sub(r"anthropic.", "", no_version)
 
 
-def get_pricing_anthropic():
+def _get_pricing_anthropic():
     """Returns a dictionary of model pricing for Anthropic models."""
     try:
         input_cost_dict = bedrock_anthropic_callback.MODEL_COST_PER_1K_INPUT_TOKENS
@@ -167,7 +240,7 @@ def get_pricing_anthropic():
     return res
 
 
-def get_pricing_litellm(model_name):
+def _get_pricing_litellm(model_name):
     """Returns a dictionary of model pricing for a LiteLLM model."""
     try:
         info = get_model_info(model_name)
@@ -221,19 +294,8 @@ class TrackAPIPricingMixin:
         Returns:
             Optional[dict]: A dict mapping model names to pricing info, or None if not found.
         """
-        pricing_fn_map = {
-            "openai": get_pricing_openai,
-            "anthropic": get_pricing_anthropic,
-            "openrouter": get_pricing_openrouter,
-            "litellm": partial(get_pricing_litellm, self.model_name),
-        }
-        pricing_fn = pricing_fn_map.get(self._pricing_api, None)
-        if pricing_fn is None:
-            logging.warning(
-                f"Unsupported provider: {self._pricing_api}. Supported providers are: {list(pricing_fn_map.keys())}"
-            )
-            return None
-        return pricing_fn()
+        result = get_pricing(self.model_name, self._pricing_api)
+        return result if result else None
 
     def set_pricing_attributes(self) -> None:
         """Set the pricing attributes for the model based on the provider."""

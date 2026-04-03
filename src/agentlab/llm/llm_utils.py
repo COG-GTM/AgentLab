@@ -124,6 +124,7 @@ def generic_call_api_with_retries(
     max_retries=10,
     initial_retry_delay_seconds=20,
     max_retry_delay_seconds=60 * 5,
+    stats=None,
 ):
     """
     Makes an API call with retries for transient failures, rate limiting,
@@ -140,6 +141,8 @@ def generic_call_api_with_retries(
         max_retries: Maximum number of retry attempts.
         initial_retry_delay_seconds: Initial delay between retries in seconds.
         max_retry_delay_seconds: Maximum delay between retries in seconds.
+        stats: Optional dict that will be populated with retry statistics
+            (e.g. ``{"attempts": int}``) when provided.
 
     Returns:
         The API response if successful.
@@ -236,6 +239,8 @@ def generic_call_api_with_retries(
 
             if is_response_valid_fn(response):
                 logging.info(f"[Attempt {attempt}/{max_retries}] API call succeeded.")
+                if stats is not None:
+                    stats["attempts"] = attempt
                 return response
             else:
                 if _handle_invalid_response_content(attempt):
@@ -266,7 +271,9 @@ def generic_call_api_with_retries(
     raise RuntimeError(f"API call failed after {max_retries} retries.")
 
 
-def call_openai_api_with_retries(client_function, api_params, max_retries=10):
+def call_openai_api_with_retries(
+    client_function, api_params, max_retries=10, stats=None, initial_retry_delay_seconds=20
+):
     """
     Makes an OpenAI API call with retries for transient failures,
     rate limiting, and invalid or error-containing responses.
@@ -276,6 +283,8 @@ def call_openai_api_with_retries(client_function, api_params, max_retries=10):
         client_function: The OpenAI API client function to call.
         api_params: Parameters to pass to the client function.
         max_retries: Maximum number of retry attempts.
+        stats: Optional dict populated with retry statistics.
+        initial_retry_delay_seconds: Initial delay between retries in seconds.
 
     Returns:
         The OpenAI API response if successful.
@@ -287,6 +296,13 @@ def call_openai_api_with_retries(client_function, api_params, max_retries=10):
             logging.warning(f"OpenAI API response contains an error attribute: {response.error}")
             return False  # Treat as invalid for retry purposes
         if hasattr(response, "choices") and response.choices:  # Chat Completion API
+            # Validate that usage info is present (OpenRouter sometimes returns usage=None)
+            if hasattr(response, "usage") and response.usage is None:
+                logging.warning(
+                    "OpenAI API response has choices but usage is None. "
+                    "This is likely an OpenRouter bug. Retrying."
+                )
+                return False
             return True
         if hasattr(response, "output") and response.output:  # Response API
             return True
@@ -304,8 +320,8 @@ def call_openai_api_with_retries(client_function, api_params, max_retries=10):
         api_error_exceptions=(openai.APIError,),  # openai.RateLimitError is caught first
         get_status_code_fn=get_openai_status_code,
         max_retries=max_retries,
-        # You can also pass initial_retry_delay_seconds and max_retry_delay_seconds
-        # if you want to customize them from their defaults in the generic function.
+        stats=stats,
+        initial_retry_delay_seconds=initial_retry_delay_seconds,
     )
 
 
