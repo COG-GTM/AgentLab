@@ -22,8 +22,17 @@ from transformers import AutoModel, AutoTokenizer
 
 langchain_community = importlib.util.find_spec("langchain_community")
 if langchain_community is not None:
-    from langchain.schema import BaseMessage as LangchainBaseMessage
-    from langchain_community.adapters.openai import convert_message_to_dict
+    try:
+        from langchain_core.messages import BaseMessage as LangchainBaseMessage
+    except ImportError:
+        try:
+            from langchain.schema import BaseMessage as LangchainBaseMessage
+        except ImportError:
+            LangchainBaseMessage = None
+    try:
+        from langchain_community.adapters.openai import convert_message_to_dict
+    except ImportError:
+        convert_message_to_dict = None
 else:
     LangchainBaseMessage = None
     convert_message_to_dict = None
