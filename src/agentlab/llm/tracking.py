@@ -13,7 +13,11 @@ import requests
 
 langchain_community = importlib.util.find_spec("langchain_community")
 if langchain_community is not None:
-    from langchain_community.callbacks import bedrock_anthropic_callback, openai_info
+    try:
+        from langchain_community.callbacks import bedrock_anthropic_callback, openai_info
+    except ImportError:
+        bedrock_anthropic_callback = None
+        openai_info = None
 else:
     bedrock_anthropic_callback = None
     openai_info = None

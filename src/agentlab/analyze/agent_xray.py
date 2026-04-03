@@ -14,7 +14,15 @@ import numpy as np
 import pandas as pd
 from attr import dataclass
 from browsergym.experiments.loop import StepInfo as BGymStepInfo
-from langchain.schema import BaseMessage, HumanMessage
+
+try:
+    from langchain_core.messages import BaseMessage, HumanMessage
+except ImportError:
+    try:
+        from langchain.schema import BaseMessage, HumanMessage
+    except ImportError:
+        BaseMessage = None
+        HumanMessage = None
 from openai import OpenAI
 from openai.types.responses import ResponseFunctionToolCall
 from PIL import Image
@@ -746,7 +754,7 @@ def format_chat_message(message: BaseMessage | MessageBuilder | dict):
     """
     Format a message to markdown.
     """
-    if isinstance(message, BaseMessage):
+    if BaseMessage is not None and isinstance(message, BaseMessage):
         return message.content
     elif isinstance(message, MessageBuilder):
         return message.to_markdown()
@@ -847,8 +855,12 @@ def submit_action(input_text):
     global info
     agent_info = info.exp_result.steps_info[info.step].agent_info
     chat_messages = deepcopy(agent_info.get("chat_messages", ["No Chat Messages"])[:2])
-    if isinstance(chat_messages[1], BaseMessage):  # TODO remove once langchain is deprecated
-        assert isinstance(chat_messages[1], HumanMessage), "Second message should be user"
+    if BaseMessage is not None and isinstance(
+        chat_messages[1], BaseMessage
+    ):  # TODO remove once langchain is deprecated
+        assert HumanMessage is not None and isinstance(
+            chat_messages[1], HumanMessage
+        ), "Second message should be user"
         chat_messages = [
             make_system_message(chat_messages[0].content),
             make_user_message(chat_messages[1].content),

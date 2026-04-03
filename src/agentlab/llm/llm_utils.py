@@ -22,8 +22,17 @@ from transformers import AutoModel, AutoTokenizer
 
 langchain_community = importlib.util.find_spec("langchain_community")
 if langchain_community is not None:
-    from langchain.schema import BaseMessage as LangchainBaseMessage
-    from langchain_community.adapters.openai import convert_message_to_dict
+    try:
+        from langchain_core.messages import BaseMessage as LangchainBaseMessage
+    except ImportError:
+        try:
+            from langchain.schema import BaseMessage as LangchainBaseMessage
+        except ImportError:
+            LangchainBaseMessage = None
+    try:
+        from langchain_community.adapters.openai import convert_message_to_dict
+    except ImportError:
+        convert_message_to_dict = None
 else:
     LangchainBaseMessage = None
     convert_message_to_dict = None
@@ -40,7 +49,13 @@ def messages_to_dict(messages: list[dict] | list[LangchainBaseMessage]) -> dict:
         elif isinstance(m, str):
             new_messages.add_message({"role": "<unknown role>", "content": m})
         elif LangchainBaseMessage is not None and isinstance(m, LangchainBaseMessage):
-            new_messages.add_message(convert_message_to_dict(m))
+            if convert_message_to_dict is not None:
+                new_messages.add_message(convert_message_to_dict(m))
+            else:
+                role_map = {"human": "user", "ai": "assistant", "system": "system"}
+                new_messages.add_message(
+                    {"role": role_map.get(m.type, m.type), "content": str(m.content)}
+                )
         else:
             raise ValueError(f"Unknown message type: {type(m)}")
     return new_messages
