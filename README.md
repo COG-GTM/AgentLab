@@ -1,132 +1,196 @@
+# AgentLab
+
+AgentLab is a Python framework for developing, evaluating, and analyzing AI agents that interact with web environments and desktop applications through standardized benchmarks.
 
 <div align="center">
-    
-
 
 [![pypi](https://badge.fury.io/py/agentlab.svg)](https://pypi.org/project/agentlab/)
-[![PyPI - License](https://img.shields.io/pypi/l/agentlab?style=flat-square)]([https://opensource.org/licenses/MIT](http://www.apache.org/licenses/LICENSE-2.0))
+[![PyPI - License](https://img.shields.io/pypi/l/agentlab?style=flat-square)](http://www.apache.org/licenses/LICENSE-2.0)
 [![PyPI - Downloads](https://img.shields.io/pypi/dm/agentlab?style=flat-square)](https://pypistats.org/packages/agentlab)
 [![GitHub star chart](https://img.shields.io/github/stars/ServiceNow/AgentLab?style=flat-square)](https://star-history.com/#ServiceNow/AgentLab)
 [![Code Format](https://github.com/ServiceNow/AgentLab/actions/workflows/code_format.yml/badge.svg)](https://github.com/ServiceNow/AgentLab/actions/workflows/code_format.yml)
 [![Tests](https://github.com/ServiceNow/AgentLab/actions/workflows/unit_tests.yml/badge.svg)](https://github.com/ServiceNow/AgentLab/actions/workflows/unit_tests.yml)
 
-
-
-[🛠️ Setup](#%EF%B8%8F-setup-agentlab) &nbsp;|&nbsp; 
-[🤖 Assistant](#-ui-assistant) &nbsp;|&nbsp; 
-[🚀 Launch Experiments](#-launch-experiments) &nbsp;|&nbsp;
-[🔍 Analyse Results](#-analyse-results) &nbsp;|&nbsp;
-<br>
-[🏆 Leaderboard](#-leaderboard) &nbsp;|&nbsp; 
-[🤖 Build Your Agent](#-implement-a-new-agent) &nbsp;|&nbsp;
-[↻ Reproducibility](#-reproducibility) &nbsp;|&nbsp;
-[💪 BrowserGym](https://github.com/ServiceNow/BrowserGym)
-
-
 <img src="https://github.com/user-attachments/assets/47a7c425-9763-46e5-be54-adac363be850" alt="agentlab-diagram" width="700"/>
 
-
-[Demo solving tasks:](https://github.com/ServiceNow/BrowserGym/assets/26232819/e0bfc788-cc8e-44f1-b8c3-0d1114108b85)
-
+[Demo solving tasks](https://github.com/ServiceNow/BrowserGym/assets/26232819/e0bfc788-cc8e-44f1-b8c3-0d1114108b85)
 
 </div>
 
 > [!WARNING]
-> AgentLab is meant to provide an open, easy-to-use and extensible framework to accelerate the field of web agent research.
-> It is not meant to be a consumer product. Use with caution!
+> AgentLab is meant to provide an open, easy-to-use and extensible framework to accelerate the field of web agent research. It is not meant to be a consumer product. Use with caution!
 
-AgentLab is a framework for developing and evaluating agents on a variety of
-[benchmarks](#-supported-benchmarks) supported by
-[BrowserGym](https://github.com/ServiceNow/BrowserGym). It is presented in more details in our [BrowserGym ecosystem paper](https://arxiv.org/abs/2412.05467)
+## Table of Contents
 
-AgentLab Features:
-* Easy large scale parallel [agent experiments](#-launch-experiments) using [ray](https://www.ray.io/)
-* Building blocks for making agents over BrowserGym
-* Unified LLM API for OpenRouter, OpenAI, Azure, or self-hosted using TGI.
-* Preferred way for running benchmarks like WebArena
-* Various [reproducibility features](#reproducibility-features)
-* Unified [LeaderBoard](https://huggingface.co/spaces/ServiceNow/browsergym-leaderboard)
+- [Key Features](#key-features)
+- [Supported Benchmarks](#supported-benchmarks)
+- [Requirements](#requirements)
+- [Quick Start](#quick-start)
+- [Project Structure](#project-structure)
+- [Usage](#usage)
+  - [UI Assistant](#ui-assistant)
+  - [Launch Experiments](#launch-experiments)
+  - [Analyze Results](#analyze-results)
+- [Leaderboard](#leaderboard)
+- [Implement a New Agent](#implement-a-new-agent)
+- [Reproducibility](#reproducibility)
+- [Environment Variables](#environment-variables)
+- [Further Documentation](#further-documentation)
+- [Contributing](#contributing)
+- [License](#license)
+- [Citing This Work](#citing-this-work)
 
-## 🎯 Supported Benchmarks
+## Key Features
 
-| Benchmark | Setup  <br> Link | # Task <br> Template| Seed  <br> Diversity | Max  <br> Step | Multi-tab | Hosted Method | BrowserGym <br> Leaderboard |
-|-----------|------------|---------|----------------|-----------|-----------|---------------|----------------------|
-| [WebArena](https://webarena.dev/) | [setup](https://github.com/ServiceNow/BrowserGym/blob/main/browsergym/webarena/README.md) | 812 | None | 30 | yes | self hosted (docker) | soon |
-| [WorkArena](https://github.com/ServiceNow/WorkArena) L1 | [setup](https://github.com/ServiceNow/WorkArena?tab=readme-ov-file#getting-started) | 33 | High | 30 | no | demo instance | soon |
-| [WorkArena](https://github.com/ServiceNow/WorkArena) L2 | [setup](https://github.com/ServiceNow/WorkArena?tab=readme-ov-file#getting-started) | 341 | High | 50 | no | demo instance | soon |
-| [WorkArena](https://github.com/ServiceNow/WorkArena) L3 | [setup](https://github.com/ServiceNow/WorkArena?tab=readme-ov-file#getting-started) | 341 | High | 50 | no | demo instance | soon |
-| [WebLinx](https://mcgill-nlp.github.io/weblinx/) | - | 31586 | None | 1 | no | self hosted (dataset) | soon |
-| [VisualWebArena](https://github.com/web-arena-x/visualwebarena) | [setup](https://github.com/ServiceNow/BrowserGym/blob/main/browsergym/visualwebarena/README.md) | 910 | None | 30 | yes | self hosted (docker) | soon |
-| [AssistantBench](https://assistantbench.github.io/) | [setup](https://github.com/ServiceNow/BrowserGym/blob/main/browsergym/assistantbench/README.md) | 214 | None | 30 | yes | live web | soon |
-| [GAIA](https://huggingface.co/spaces/gaia-benchmark/leaderboard) (soon) | - | - | None | - | - | live web | soon |
-| [Mind2Web-live](https://huggingface.co/datasets/iMeanAI/Mind2Web-Live) (soon) | - | - | None | - | - | live web | soon |
-| [MiniWoB](https://miniwob.farama.org/index.html) | [setup](https://github.com/ServiceNow/BrowserGym/blob/main/browsergym/miniwob/README.md) | 125 | Medium | 10 | no | self hosted (static files) | soon |
-| [OSWorld](https://os-world.github.io/) | [setup](https://github.com/ServiceNow/AgentLab/blob/main/src/agentlab/benchmarks/osworld.md) | 369 | None | - | - | self hosted  | soon |
+AgentLab provides a comprehensive toolkit for web agent research and development:
 
+**Multi-Benchmark Support**: Evaluate agents across standardized benchmarks including WebArena, WorkArena, VisualWebArena, MiniWoB, OSWorld, AssistantBench, and more through the [BrowserGym](https://github.com/ServiceNow/BrowserGym) ecosystem.
 
-## 🛠️ Setup AgentLab
+**LLM Integration**: Unified API supporting multiple providers including OpenAI, Azure OpenAI, OpenRouter, Anthropic, and self-hosted models via TGI or LiteLLM.
 
-AgentLab requires python 3.11 or 3.12.
+**Experiment Management**: Run large-scale parallel experiments using [Ray](https://www.ray.io/) with automatic job scheduling, timeout handling, and result persistence.
+
+**Analysis Tools**: Visualize and analyze agent behavior with AgentXray, a Gradio-based interface for exploring experiment traces, screenshots, and step-by-step actions.
+
+**Reproducibility**: Built-in features for tracking software versions, benchmark states, and experiment configurations to ensure reproducible results.
+
+## Supported Benchmarks
+
+| Benchmark | Setup Link | Task Templates | Seed Diversity | Max Steps | Multi-tab | Hosted Method |
+|-----------|------------|----------------|----------------|-----------|-----------|---------------|
+| [WebArena](https://webarena.dev/) | [setup](https://github.com/ServiceNow/BrowserGym/blob/main/browsergym/webarena/README.md) | 812 | None | 30 | yes | self hosted (docker) |
+| [WorkArena L1](https://github.com/ServiceNow/WorkArena) | [setup](https://github.com/ServiceNow/WorkArena?tab=readme-ov-file#getting-started) | 33 | High | 30 | no | demo instance |
+| [WorkArena L2](https://github.com/ServiceNow/WorkArena) | [setup](https://github.com/ServiceNow/WorkArena?tab=readme-ov-file#getting-started) | 341 | High | 50 | no | demo instance |
+| [WorkArena L3](https://github.com/ServiceNow/WorkArena) | [setup](https://github.com/ServiceNow/WorkArena?tab=readme-ov-file#getting-started) | 341 | High | 50 | no | demo instance |
+| [WebLinx](https://mcgill-nlp.github.io/weblinx/) | - | 31586 | None | 1 | no | self hosted (dataset) |
+| [VisualWebArena](https://github.com/web-arena-x/visualwebarena) | [setup](https://github.com/ServiceNow/BrowserGym/blob/main/browsergym/visualwebarena/README.md) | 910 | None | 30 | yes | self hosted (docker) |
+| [AssistantBench](https://assistantbench.github.io/) | [setup](https://github.com/ServiceNow/BrowserGym/blob/main/browsergym/assistantbench/README.md) | 214 | None | 30 | yes | live web |
+| [MiniWoB](https://miniwob.farama.org/index.html) | [setup](https://github.com/ServiceNow/BrowserGym/blob/main/browsergym/miniwob/README.md) | 125 | Medium | 10 | no | self hosted (static files) |
+| [OSWorld](https://os-world.github.io/) | [setup](https://github.com/ServiceNow/AgentLab/blob/main/src/agentlab/benchmarks/osworld.md) | 369 | None | - | - | self hosted |
+
+## Requirements
+
+- Python 3.11 or 3.12
+- [Playwright](https://playwright.dev/) for browser automation
+- API keys for your chosen LLM provider (OpenAI, Azure, OpenRouter, or Anthropic)
+- Benchmark-specific setup (see [Supported Benchmarks](#supported-benchmarks))
+
+## Quick Start
+
+### Installation
+
+Install AgentLab from PyPI:
 
 ```bash
 pip install agentlab
 ```
 
-If not done already, install Playwright:
+Install Playwright browser dependencies:
+
 ```bash
-playwright install
+playwright install chromium
 ```
 
-Make sure to prepare the required benchmark according to the instructions provided in the [setup
-column](#-supported-benchmarks).
+### Configuration
+
+Set up your environment variables:
 
 ```bash
-export AGENTLAB_EXP_ROOT=<root directory of experiment results>  # defaults to $HOME/agentlab_results
-export OPENAI_API_KEY=<your openai api key> # if openai models are used
+# Required: Directory for experiment results (defaults to ~/agentlab_results)
+export AGENTLAB_EXP_ROOT=/path/to/your/experiments
+
+# Required: API key for your LLM provider
+export OPENAI_API_KEY=your-openai-api-key
 ```
 
 <details>
-<summary>Setup OpenRouter API</summary>
+<summary>OpenRouter API Setup</summary>
 
 ```bash
-export OPENROUTER_API_KEY=<your openrouter api key> # if openrouter models are used
+export OPENROUTER_API_KEY=your-openrouter-api-key
 ```
 </details>
 
 <details>
-<summary>Setup Azure API</summary>
+<summary>Azure OpenAI Setup</summary>
 
 ```bash
-export AZURE_OPENAI_API_KEY=<your azure api key> # if using azure models
-export AZURE_OPENAI_ENDPOINT=<your endpoint> # if using azure models
+export AZURE_OPENAI_API_KEY=your-azure-api-key
+export AZURE_OPENAI_ENDPOINT=your-azure-endpoint
+export OPENAI_API_VERSION=2024-02-15-preview  # optional
 ```
 </details>
 
-## 🤖 UI-Assistant 
+<details>
+<summary>Anthropic Setup</summary>
 
-Use an assistant to work for you (at your own cost and risk).
+```bash
+export ANTHROPIC_API_KEY=your-anthropic-api-key
+```
+</details>
+
+### Run Your First Agent
+
+Launch an interactive agent session:
 
 ```bash
 agentlab-assistant --start_url https://www.google.com
 ```
 
-Try your own agent: 
+## Project Structure
+
+```
+src/agentlab/
+├── agents/                 # Agent implementations
+│   ├── generic_agent/      # Configurable baseline agent with dynamic prompting
+│   ├── most_basic_agent/   # Minimal agent example for reference
+│   ├── tool_use_agent/     # Agent specialized for function calling
+│   ├── tapeagent/          # Agent with execution recording
+│   └── visual_agent/       # Vision-enabled agent
+├── analyze/                # Result analysis and visualization
+│   ├── agent_xray.py       # Gradio-based experiment explorer
+│   ├── inspect_results.py  # Result loading and reporting utilities
+│   └── episode_to_html.py  # HTML visualization generation
+├── benchmarks/             # Benchmark environment wrappers
+│   ├── osworld.py          # OSWorld desktop automation
+│   ├── gaia.py             # GAIA multi-tool tasks
+│   └── abstract_env.py     # Base benchmark interface
+├── experiments/            # Experiment orchestration
+│   ├── study.py            # Study management and execution
+│   ├── loop.py             # Agent-environment interaction loop
+│   └── graph_execution_ray.py  # Parallel execution with Ray
+└── llm/                    # LLM API integration
+    ├── chat_api.py         # Multi-provider chat interface
+    ├── llm_configs.py      # Pre-configured model settings
+    └── tracking.py         # Token usage and cost tracking
+```
+
+## Usage
+
+### UI Assistant
+
+Use an interactive agent to browse the web on your behalf:
+
+```bash
+agentlab-assistant --start_url https://www.google.com
+```
+
+Use a custom agent configuration:
 
 ```bash
 agentlab-assistant --agent_config="module.path.to.your.AgentArgs"
 ```
 
-## 🚀 Launch experiments
+### Launch Experiments
+
+Run a study across a benchmark:
 
 ```python
-# Import your agent configuration extending bgym.AgentArgs class
-# Make sure this object is imported from a module accessible in PYTHONPATH to properly unpickle
-from agentlab.agents.generic_agent import AGENT_4o_MINI 
-
+from agentlab.agents.generic_agent import AGENT_4o_MINI
 from agentlab.experiments.study import make_study
 
 study = make_study(
-    benchmark="miniwob",  # or "webarena", "workarena_l1" ...
+    benchmark="miniwob",  # or "webarena", "workarena_l1", etc.
     agent_args=[AGENT_4o_MINI],
     comment="My first study",
 )
@@ -134,177 +198,162 @@ study = make_study(
 study.run(n_jobs=5)
 ```
 
-Relaunching incomplete or errored tasks
+Relaunch incomplete or errored tasks:
 
 ```python
 from agentlab.experiments.study import Study
+
 study = Study.load("/path/to/your/study/dir")
 study.find_incomplete(include_errors=True)
 study.run()
 ```
 
-See [main.py](main.py) to launch experiments with a variety of options. This is like a lazy CLI that
-is actually more convenient. Just comment and uncomment the lines you need or modify at will (but
-don't push to the repo).
+See [main.py](main.py) for additional experiment configuration options.
 
+#### Job Timeouts
 
-### Job Timeouts
+The complexity of web environments can sometimes cause jobs to hang. The Ray parallel backend includes automatic timeout handling to terminate stuck jobs and maintain experiment progress.
 
-The complexity of the wild web, Playwright, and asyncio can sometimes cause jobs to hang. This
-disables workers until the study is terminated and relaunched. If you are running jobs sequentially
-or with a small number of workers, this could halt your entire study until you manually kill and
-relaunch it. In the Ray parallel backend, we've implemented a system to automatically terminate jobs
-exceeding a specified timeout. This feature is particularly useful when task hanging limits your
-experiments. 
+#### Debugging
 
-### Debugging
+For debugging, run experiments with `n_jobs=1` and use your IDE debug mode to set breakpoints and step through execution.
 
-For debugging, run experiments with `n_jobs=1` and use VSCode's debug mode. This allows you to pause
-execution at breakpoints.
+#### Parallel Execution Notes
 
-### About Parallel Jobs
+Running one agent on one task corresponds to a single job. Ablation studies across hundreds of tasks can generate thousands of jobs, making efficient parallel execution critical. Agents typically wait for LLM responses or web server updates, allowing 10-50 parallel jobs on a single machine depending on available RAM.
 
-Running one agent on one task corresponds to a single job. Conducting ablation studies or random
-searches across hundreds of tasks with multiple seeds can generate more than 10,000 jobs. Efficient
-parallel execution is therefore critical. Agents typically wait for responses from the LLM server or
-updates from the web server. As a result, you can run 10–50 jobs in parallel on a single computer,
-depending on available RAM.
+**Note for WebArena/VisualWebArena**: These benchmarks have task dependencies to prevent state corruption between tasks. The Ray backend accounts for these dependencies while still enabling parallelism. Before evaluating an agent, the instance is automatically reset (approximately 5 minutes).
 
-⚠️ **Note for (Visual)WebArena**: These benchmarks have task dependencies designed to minimize
-"corrupting" the instance between tasks. For example, an agent on task 323 could alter the instance
-state, making task 201 impossible. To address this, the Ray backend accounts for task dependencies,
-enabling some degree of parallelism. On WebArena, you can disable dependencies to increase
-parallelism, but this might reduce performance by 1–2%.
+### Analyze Results
 
-⚠️ **Instance Reset for (Visual)WebArena**: Before evaluating an agent, the instance is
-automatically reset, a process that takes about 5 minutes. When evaluating multiple agents, the
-`make_study` function returns a `SequentialStudies` object to ensure proper sequential evaluation of
-each agent. AgentLab currently does not support evaluations across multiple instances, but you could
-either create a quick script to handle this or submit a PR to AgentLab. For a smoother parallel
-experience, consider using benchmarks like WorkArena instead.
-
-## 🔍 Analyse Results
-
-### Loading Results
-
-The class [`ExpResult`](https://github.com/ServiceNow/BrowserGym/blob/da26a5849d99d9a3169d7b1fde79f909c55c9ba7/browsergym/experiments/src/browsergym/experiments/loop.py#L595) provides a lazy loader for all the information of a specific experiment. You can use [`yield_all_exp_results`](https://github.com/ServiceNow/BrowserGym/blob/da26a5849d99d9a3169d7b1fde79f909c55c9ba7/browsergym/experiments/src/browsergym/experiments/loop.py#L872) to recursively find all results in a directory. Finally [`load_result_df`](https://github.com/ServiceNow/AgentLab/blob/be1998c5fad5bda47ba50497ec3899aae03e85ec/src/agentlab/analyze/inspect_results.py#L119C5-L119C19) gathers all the summary information in a single dataframe. See [`inspect_results.ipynb`](src/agentlab/analyze/inspect_results.ipynb) for example usage.
+#### Loading Results
 
 ```python
 from agentlab.analyze import inspect_results
+import browsergym as bgym
 
-# load the summary of all experiments of the study in a dataframe
-result_df = inspect_results.load_result_df("path/to/your/study")
+# Load study results into a DataFrame
+result_df = inspect_results.load_result_df("/path/to/your/study")
 
-# load the detailed results of the 1st experiment
+# Load detailed results for a specific experiment
 exp_result = bgym.ExpResult(result_df["exp_dir"][0])
 step_0_screenshot = exp_result.screenshots[0]
 step_0_action = exp_result.steps_info[0].action
 ```
 
+See [inspect_results.ipynb](src/agentlab/analyze/inspect_results.ipynb) for detailed analysis examples.
 
-### AgentXray
+#### AgentXray
 
-https://github.com/user-attachments/assets/06c4dac0-b78f-45b7-9405-003da4af6b37
+Launch the visual experiment explorer:
 
-In a terminal, execute:
 ```bash
 agentlab-xray
 ```
 
-You can load previous or ongoing experiments in the directory `AGENTLAB_EXP_ROOT` and visualize
-the results in a gradio interface.
+AgentXray provides a Gradio interface to explore experiments in your `AGENTLAB_EXP_ROOT` directory. Select an experiment, agent, task, and seed to view the step-by-step trace with screenshots and actions.
 
-In the following order, select:
-* The experiment you want to visualize
-* The agent if there is more than one
-* The task
-* And the seed
+https://github.com/user-attachments/assets/06c4dac0-b78f-45b7-9405-003da4af6b37
 
-Once this is selected, you can see the trace of your agent on the given task. Click on the profiling
-image to select a step and observe the action taken by the agent.
+## Leaderboard
 
+View the official unified [leaderboard](https://huggingface.co/spaces/ServiceNow/browsergym-leaderboard) for benchmark results across all supported environments.
 
-**⚠️ Note**: Gradio is still developing, and unexpected behavior has been frequently noticed. Version 5.5 seems to work properly so far. If you're not sure that the proper information is displaying, refresh the page and select your experiment again.
+## Implement a New Agent
 
+Create a custom agent by following the example in [most_basic_agent.py](src/agentlab/agents/most_basic_agent/most_basic_agent.py). For full integration with AgentLab tools, implement the [AgentArgs](src/agentlab/agents/agent_args.py) API and extend `bgym.AbstractAgentArgs`.
 
-## 🏆 Leaderboard
+If you develop an agent that could benefit the community, consider contributing it to the `agentlab/agents/` directory.
 
-Official unified [leaderboard](https://huggingface.co/spaces/ServiceNow/browsergym-leaderboard) across all benchmarks. 
+## Reproducibility
 
-Experiments are on their way for more reference points using GenericAgent. We are also working on code to automatically push a study to the leaderboard.
+Several factors can affect reproducibility when evaluating agents on dynamic benchmarks:
 
-## 🤖 Implement a new Agent
+**Software Versions**: Different versions of Playwright or other dependencies may influence benchmark or agent behavior.
 
-Get inspiration from the `MostBasicAgent` in
-[agentlab/agents/most_basic_agent/most_basic_agent.py](src/agentlab/agents/most_basic_agent/most_basic_agent.py).
-For a better integration with the tools, make sure to implement most functions in the
-[AgentArgs](src/agentlab/agents/agent_args.py#L5) API and the extended `bgym.AbstractAgentArgs`.
+**API-based LLMs**: Even for a fixed version, LLMs may be silently updated by providers.
 
-If you think your agent should be included directly in AgenLab, let us know and it can be added in
-agentlab/agents/ with the name of your agent.  
+**Live Websites**: WorkArena uses a mostly-fixed demo instance, while AssistantBench and GAIA rely on the open web where content varies by region and time.
 
-## ↻ Reproducibility
-Several factors can influence reproducibility of results in the context of evaluating agents on
-dynamic benchmarks.
+**Stochastic Agents**: Setting LLM temperature to 0 reduces most stochasticity.
 
-### Factors affecting reproducibility
-* **Software version**: Different versions of Playwright or any package in the software stack could
-  influence the behavior of the benchmark or the agent.
-* **API-based LLMs silently changing**: Even for a fixed version, an LLM may be updated e.g. to
-  incorporate the latest web knowledge.
-* **Live websites**:
-  * WorkArena: The demo instance is mostly fixed in time to a specific version but ServiceNow
-    sometimes pushes minor modifications.
-  * AssistantBench and GAIA: These rely on the agent navigating the open web. The experience may
-    change depending on which country or region, some websites might be in different languages by
-    default.
-* **Stochastic Agents**: Setting the temperature of the LLM to 0 can reduce most stochasticity.
-* **Non-deterministic tasks**: For a fixed seed, the changes should be minimal
+**Non-deterministic Tasks**: For a fixed seed, changes should be minimal.
 
 ### Reproducibility Features
-* `Study` contains a dict of information about reproducibility, including benchmark version, package
-  version and commit hash
-* The `Study` class allows automatic upload of your results to
-  [`reproducibility_journal.csv`](reproducibility_journal.csv). This makes it easier to populate a
-  large amount of reference points. For this feature, you need to `git clone` the repository and install via `pip install -e .`.
-* **Reproduced results in the leaderboard**. For agents that are reprocudibile, we encourage users
-  to try to reproduce the results and upload them to the leaderboard. There is a special column
-  containing information about all reproduced results of an agent on a benchmark.
-* **ReproducibilityAgent**: [You can run this agent](src/agentlab/agents/generic_agent/reproducibility_agent.py) on an existing study and it will try to re-run
-  the same actions on the same task seeds. A visual diff of the two prompts will be displayed in the
-  AgentInfo HTML tab of AgentXray. You will be able to inspect on some tasks what kind of changes
-  between the two executions. **Note**: this is a beta feature and will need some adaptation for your
-  own agent.
 
-## Variables
-Here's a list of relevant env. variables that are used by AgentLab:
-- `OPEAI_API_KEY` which is used by default for OpenAI LLMs.
-- `AZURE_OPENAI_API_KEY`, used by default for AzureOpenAI LLMs.
-- `AZURE_OPENAI_ENDPOINT` to specify your Azure endpoint.
-- `OPENAI_API_VERSION` for the Azure API.
-- `OPENROUTER_API_KEY` for the Openrouter API
-- `AGENTLAB_EXP_ROOT`, desired path for your experiments to be stored, defaults to `~/agentlab-results`.
-- `AGENTXRAY_SHARE_GRADIO`, which prompts AgentXRay to open a public tunnel on launch.
+- **Study Metadata**: Each `Study` contains version information including benchmark version, package versions, and commit hashes.
+- **Reproducibility Journal**: Automatic upload of results to [reproducibility_journal.csv](reproducibility_journal.csv) for reference tracking. Requires installation via `pip install -e .` from a cloned repository.
+- **Leaderboard Reproduction**: The leaderboard includes a column for reproduced results, encouraging validation of published agent performance.
+- **ReproducibilityAgent**: [Run this agent](src/agentlab/agents/generic_agent/reproducibility_agent.py) on an existing study to replay actions and compare execution traces with visual diffs in AgentXray.
 
-## Misc
+## Environment Variables
 
-if you want to download HF models more quickly
-```
-pip install hf-transfer
-pip install torch
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `OPENAI_API_KEY` | OpenAI API key | - |
+| `AZURE_OPENAI_API_KEY` | Azure OpenAI API key | - |
+| `AZURE_OPENAI_ENDPOINT` | Azure OpenAI endpoint URL | - |
+| `OPENAI_API_VERSION` | Azure API version | - |
+| `OPENROUTER_API_KEY` | OpenRouter API key | - |
+| `ANTHROPIC_API_KEY` | Anthropic API key | - |
+| `AGENTLAB_EXP_ROOT` | Experiment results directory | `~/agentlab_results` |
+| `AGENTXRAY_SHARE_GRADIO` | Open public Gradio tunnel | `false` |
+
+### Optional: Faster Model Downloads
+
+For faster HuggingFace model downloads:
+
+```bash
+pip install hf-transfer torch
 export HF_HUB_ENABLE_HF_TRANSFER=1
 ```
 
+## Further Documentation
 
-## 📝 Citing This Work
+- [BrowserGym Documentation](https://github.com/ServiceNow/BrowserGym) - Core browser automation framework
+- [BrowserGym Ecosystem Paper](https://arxiv.org/abs/2412.05467) - Detailed technical description
+- [OSWorld Setup Guide](src/agentlab/benchmarks/osworld.md) - Desktop automation benchmark configuration
+- [LLM Integration Guide](src/agentlab/llm/README.md) - Detailed LLM provider configuration
 
-Please use the two following bibtex entries if you wish to cite AgentLab:
+## Contributing
 
-```tex
-@article{
-    chezelles2025browsergym,
+Contributions are welcome! AgentLab is an open framework designed to accelerate web agent research.
+
+To contribute:
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes following the existing code style
+4. Run tests with `make test`
+5. Submit a pull request
+
+For development setup:
+
+```bash
+git clone https://github.com/ServiceNow/AgentLab.git
+cd AgentLab
+pip install -e ".[dev]"
+playwright install chromium --with-deps
+```
+
+Run code formatting:
+
+```bash
+black src/ --check --diff
+```
+
+## License
+
+AgentLab is licensed under the [Apache License 2.0](LICENSE).
+
+## Citing This Work
+
+If you use AgentLab in your research, please cite:
+
+```bibtex
+@article{chezelles2025browsergym,
     title={The BrowserGym Ecosystem for Web Agent Research},
-    author={Thibault Le Sellier de Chezelles and Maxime Gasse and Alexandre Lacoste and Massimo Caccia and Alexandre Drouin and L{\'e}o Boisvert and Megh Thakkar and Tom Marty and Rim Assouel and Sahar Omidi Shayegan and Lawrence Keunho Jang and Xing Han L{\`u} and Ori Yoran and Dehan Kong and Frank F. Xu and Siva Reddy and Graham Neubig and Quentin Cappart and Russ Salakhutdinov and Nicolas Chapados},
+    author={Thibault Le Sellier de Chezelles and Maxime Gasse and Alexandre Lacoste and Massimo Caccia and Alexandre Drouin and L{'''e}o Boisvert and Megh Thakkar and Tom Marty and Rim Assouel and Sahar Omidi Shayegan and Lawrence Keunho Jang and Xing Han L{'`''u} and Ori Yoran and Dehan Kong and Frank F. Xu and Siva Reddy and Graham Neubig and Quentin Cappart and Russ Salakhutdinov and Nicolas Chapados},
     journal={Transactions on Machine Learning Research},
     issn={2835-8856},
     year={2025},
@@ -313,22 +362,26 @@ Please use the two following bibtex entries if you wish to cite AgentLab:
 }
 
 @inproceedings{workarena2024,
-    title = {{W}ork{A}rena: How Capable are Web Agents at Solving Common Knowledge Work Tasks?},
-    author = {Drouin, Alexandre and Gasse, Maxime and Caccia, Massimo and Laradji, Issam H. and Del Verme, Manuel and Marty, Tom and Vazquez, David and Chapados, Nicolas and Lacoste, Alexandre},
-    booktitle = {Proceedings of the 41st International Conference on Machine Learning},
-    pages = {11642--11662},
-    year = {2024},
-    editor = {Salakhutdinov, Ruslan and Kolter, Zico and Heller, Katherine and Weller, Adrian and Oliver, Nuria and Scarlett, Jonathan and Berkenkamp, Felix},
-    volume = {235},
-    series = {Proceedings of Machine Learning Research},
-    month = {21--27 Jul},
-    publisher = {PMLR},
-    url = {https://proceedings.mlr.press/v235/drouin24a.html},
+    title={{W}ork{A}rena: How Capable are Web Agents at Solving Common Knowledge Work Tasks?},
+    author={Drouin, Alexandre and Gasse, Maxime and Caccia, Massimo and Laradji, Issam H. and Del Verme, Manuel and Marty, Tom and Vazquez, David and Chapados, Nicolas and Lacoste, Alexandre},
+    booktitle={Proceedings of the 41st International Conference on Machine Learning},
+    pages={11642--11662},
+    year={2024},
+    editor={Salakhutdinov, Ruslan and Kolter, Zico and Heller, Katherine and Weller, Adrian and Oliver, Nuria and Scarlett, Jonathan and Berkenkamp, Felix},
+    volume={235},
+    series={Proceedings of Machine Learning Research},
+    month={21--27 Jul},
+    publisher={PMLR},
+    url={https://proceedings.mlr.press/v235/drouin24a.html},
 }
 ```
 
-Here is an example of how they can be used:
+Example usage in papers:
 
 ```tex
 We use the AgentLab framework to run and manage our experiments \cite{workarena2024,chezelles2025browsergym}.
 ```
+
+---
+
+_Originally written and maintained by contributors and [Devin](https://app.devin.ai), with updates from the core team._
