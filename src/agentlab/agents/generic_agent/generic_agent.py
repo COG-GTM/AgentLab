@@ -9,16 +9,17 @@ the agent, including model arguments and flags for various behaviors.
 """
 
 from copy import deepcopy
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from functools import partial
 from warnings import warn
 
 import bgym
 from bgym import Benchmark
-from browsergym.experiments.agent import Agent, AgentInfo
+from browsergym.experiments.agent import Agent
 
 from agentlab.agents import dynamic_prompting as dp
-from agentlab.agents.agent_args import AgentArgs
+from agentlab.agents.agent_args import ChatModelAgentArgs
+from agentlab.agents.agent_utils import busted_retry_ans_dict, make_agent_info
 from agentlab.llm.chat_api import BaseModelArgs
 from agentlab.llm.llm_utils import Discussion, ParseError, SystemMessage, retry
 from agentlab.llm.tracking import cost_tracker_decorator
@@ -27,7 +28,7 @@ from .generic_agent_prompt import GenericPromptFlags, MainPrompt
 
 
 @dataclass
-class GenericAgentArgs(AgentArgs):
+class GenericAgentArgs(ChatModelAgentArgs):
     chat_model_args: BaseModelArgs = None
     flags: GenericPromptFlags = None
     max_retry: int = 4
@@ -58,12 +59,6 @@ class GenericAgentArgs(AgentArgs):
 
     def set_reproducibility_mode(self):
         self.chat_model_args.temperature = 0
-
-    def prepare(self):
-        return self.chat_model_args.prepare_server()
-
-    def close(self):
-        return self.chat_model_args.close_server()
 
     def make_agent(self):
         return GenericAgent(
@@ -134,16 +129,8 @@ class GenericAgent(Agent):
             ans_dict["busted_retry"] = 0
             # inferring the number of retries, TODO: make this less hacky
             ans_dict["n_retry"] = (len(chat_messages) - 3) / 2
-        except ParseError as e:
-            ans_dict = dict(
-                action=None,
-                n_retry=self.max_retry + 1,
-                busted_retry=1,
-            )
-
-        stats = self.chat_llm.get_stats()
-        stats["n_retry"] = ans_dict["n_retry"]
-        stats["busted_retry"] = ans_dict["busted_retry"]
+        except ParseError:
+            ans_dict = busted_retry_ans_dict(self.max_retry)
 
         self.plan = ans_dict.get("plan", self.plan)
         self.plan_step = ans_dict.get("step", self.plan_step)
@@ -151,12 +138,7 @@ class GenericAgent(Agent):
         self.memories.append(ans_dict.get("memory", None))
         self.thoughts.append(ans_dict.get("think", None))
 
-        agent_info = AgentInfo(
-            think=ans_dict.get("think", None),
-            chat_messages=chat_messages,
-            stats=stats,
-            extra_info={"chat_model_args": asdict(self.chat_model_args)},
-        )
+        agent_info = make_agent_info(self.chat_llm, ans_dict, chat_messages, self.chat_model_args)
         return ans_dict["action"], agent_info
 
     def reset(self, seed=None):

@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 import bgym
 
-from agentlab.agents.agent_args import AgentArgs
+from agentlab.agents.agent_args import ChatModelAgentArgs
 from agentlab.experiments.loop import ExpArgs
 from agentlab.llm.llm_configs import CHAT_MODEL_ARGS_DICT
 from agentlab.llm.llm_utils import (
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class MostBasicAgentArgs(AgentArgs):
+class MostBasicAgentArgs(ChatModelAgentArgs):
     agent_name: str = "BasicAgent"
     temperature: float = 0.1
     use_chain_of_thought: bool = False
@@ -37,12 +37,6 @@ class MostBasicAgentArgs(AgentArgs):
 
     def set_reproducibility_mode(self):
         self.temperature = 0
-
-    def prepare(self):
-        return self.chat_model_args.prepare_server()
-
-    def close(self):
-        return self.chat_model_args.close_server()
 
 
 class MostBasicAgent(bgym.Agent):

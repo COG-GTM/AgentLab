@@ -1,5 +1,50 @@
+from dataclasses import asdict
+
+from browsergym.experiments.agent import AgentInfo
 from PIL import Image, ImageDraw
 from playwright.sync_api import Page
+
+
+def busted_retry_ans_dict(max_retry: int) -> dict:
+    """Fallback answer dict used when parsing the LLM response keeps failing.
+
+    Args:
+        max_retry: The maximum number of retries the agent allowed.
+
+    Returns:
+        An answer dict with a null action and the retry bookkeeping marking the
+        step as a busted retry.
+    """
+    return dict(action=None, n_retry=max_retry + 1, busted_retry=1)
+
+
+def make_agent_info(chat_llm, ans_dict: dict, chat_messages, chat_model_args) -> AgentInfo:
+    """Build the ``AgentInfo`` returned by chat-based agents from ``get_action``.
+
+    Collects the LLM call stats, augments them with the retry bookkeeping found
+    in ``ans_dict`` and packages everything (thought, messages, stats, model
+    args) into an ``AgentInfo``.
+
+    Args:
+        chat_llm: The chat model, used to retrieve per-call stats.
+        ans_dict: The parsed answer dict (must contain ``n_retry`` and
+            ``busted_retry``; ``think`` is optional).
+        chat_messages: The messages exchanged with the model for this step.
+        chat_model_args: The model args dataclass, serialized into ``extra_info``.
+
+    Returns:
+        The populated ``AgentInfo``.
+    """
+    stats = chat_llm.get_stats()
+    stats["n_retry"] = ans_dict["n_retry"]
+    stats["busted_retry"] = ans_dict["busted_retry"]
+
+    return AgentInfo(
+        think=ans_dict.get("think", None),
+        chat_messages=chat_messages,
+        stats=stats,
+        extra_info={"chat_model_args": asdict(chat_model_args)},
+    )
 
 
 def draw_mouse_pointer(image: Image.Image, x: int, y: int) -> Image.Image:
