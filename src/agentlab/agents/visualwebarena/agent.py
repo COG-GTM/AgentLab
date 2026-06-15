@@ -19,7 +19,7 @@ from agentlab.llm.llm_configs import CHAT_MODEL_ARGS_DICT
 from agentlab.llm.llm_utils import ParseError, extract_code_blocks, retry
 from agentlab.llm.tracking import cost_tracker_decorator
 
-from ..agent_args import AgentArgs
+from ..agent_args import ChatModelAgentArgs
 from . import few_shots
 from .prompts import TEMPLATES
 
@@ -50,7 +50,7 @@ def image_data_to_uri(
 
 
 @dataclass
-class VisualWebArenaAgentArgs(AgentArgs):
+class VisualWebArenaAgentArgs(ChatModelAgentArgs):
     agent_name: str = "VisualWebArenaAgent"
     temperature: float = 0.1
     chat_model_args: BaseModelArgs = None
@@ -79,12 +79,6 @@ class VisualWebArenaAgentArgs(AgentArgs):
 
     def set_reproducibility_mode(self):
         self.temperature = 0.0
-
-    def prepare(self):
-        return self.chat_model_args.prepare_server()
-
-    def close(self):
-        return self.chat_model_args.close_server()
 
 
 def parser(response: str) -> dict:

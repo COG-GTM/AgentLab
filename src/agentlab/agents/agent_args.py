@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 import bgym
 from bgym import AbstractAgentArgs, Benchmark
 
@@ -45,3 +47,20 @@ class AgentArgs(AbstractAgentArgs):
         raise NotImplementedError(
             f"set_reproducibility_mode is not implemented for agent_args {self.__class__.__name__}"
         )
+
+
+@dataclass
+class ChatModelAgentArgs(AgentArgs):
+    """Base class for agents whose LLM is configured via ``chat_model_args``.
+
+    Provides the ``prepare``/``close`` implementations shared by every agent
+    that holds a ``chat_model_args`` factory, starting and stopping the
+    underlying LLM server. Subclasses are still responsible for declaring the
+    ``chat_model_args`` field and implementing ``make_agent``.
+    """
+
+    def prepare(self):
+        return self.chat_model_args.prepare_server()
+
+    def close(self):
+        return self.chat_model_args.close_server()
