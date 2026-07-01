@@ -1,0 +1,109 @@
+# =============================================================================
+# Python Code Standards - Formatting + Static Analysis Configuration
+# =============================================================================
+# Reference: https://docs.astral.sh/ruff/settings/
+#
+# This single file is the Python equivalent of the framework's `.clang-format`
+# (formatting) AND `.clang-tidy` (static analysis) configs. Ruff performs both
+# roles: `ruff format` handles style, `ruff check` handles bug/security analysis.
+#
+# To use (non-destructively, against a target dir):
+#   ruff format --config code-standards/ruff.toml --check src/
+#   ruff check  --config code-standards/ruff.toml src/
+# Or via the wrapper:
+#   ./code-standards/scripts/validate.sh src/
+#
+# This configuration enables safety-critical checks including:
+# - flake8-bandit security guidelines (insecure APIs, injection)
+# - Undefined / use-before-assignment detection
+# - Resource-leak (unclosed file) detection
+# - Naming, redundancy, performance, and modernization checks
+# =============================================================================
+
+# --- Formatting (Rule 40) --- kept Black-compatible (line-length 100) so this
+# framework does NOT fight the repo's existing Black-based CI.
+line-length = 100
+target-version = "py310"
+
+# Match the repo's existing exclusions.
+extend-exclude = [
+    ".eggs",
+    ".git",
+    ".mypy_cache",
+    ".nox",
+    ".tox",
+    ".venv",
+    "_build",
+    "build",
+    "dist",
+]
+
+[format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[lint]
+# =============================================================================
+# ENABLED CHECKS - grouped by severity tier (see rule-severity-mapping.yaml)
+# =============================================================================
+select = [
+    # ---- Critical (Rule 20-26): safety / security ----
+    "E722",   # Rule 20: bare except (hides failures)
+    "BLE001", # Rule 20: blind except Exception
+    "S",      # Rule 21 & 26: flake8-bandit (injection, eval/exec, pickle,
+              #               yaml.load, weak hashes, subprocess shell, insecure random)
+    "SIM115", # Rule 23: open() without a context manager (resource leak)
+    "B006",   # Rule 24: mutable default argument
+    "B008",   # Rule 24: function call in default argument
+    "F821",   # Rule 25: undefined name
+    "F822",   # Rule 25: undefined name in __all__
+    "F823",   # Rule 25: local variable referenced before assignment
+
+    # ---- Major (Rule 30-35): quality / potential bugs ----
+    "E721",   # Rule 30: type comparison with == instead of is
+    "F632",   # Rule 30: use of == to compare constant literals
+    "F811",   # Rule 32: redefinition of unused name
+    "F841",   # Rule 32: local variable assigned but never used
+    "F701",   # Rule 33: break outside loop
+    "F702",   # Rule 33: continue outside loop
+    "F706",   # Rule 33: return outside function
+    "PERF",   # Rule 35: perflint performance checks
+    "C4",     # Rule 35: flake8-comprehensions
+
+    # ---- Minor (Rule 40-46): style / maintainability ----
+    "N",      # Rule 41: pep8-naming
+    "E711",   # Rule 42: comparison to None should use `is`
+    "E712",   # Rule 42: comparison to True/False should use `is`/truthiness
+    "E713",   # Rule 42: test for membership should be `not in`
+    "E714",   # Rule 42: test for object identity should be `is not`
+    "SIM",    # Rule 43: flake8-simplify (boolean/branch simplification)
+    "RET505", # Rule 44: superfluous else after return
+    "RET506", # Rule 44: superfluous else after raise
+    "RET507", # Rule 44: superfluous else after continue
+    "RET508", # Rule 44: superfluous else after break
+    "UP",     # Rule 45: pyupgrade (modern syntax - the "use nullptr" analog)
+    "F401",   # Rule 46: unused import
+    "ARG",    # Rule 46: unused function/method argument
+]
+
+# Noisy checks intentionally disabled (mirrors the C framework disabling
+# easily-swappable-parameters, magic-numbers, cognitive-complexity, etc.)
+ignore = [
+    "S101",   # assert used - common and acceptable in tests
+    "S603",   # subprocess-without-shell-equals-true - fires on ALL subprocess use (low signal)
+    "S607",   # start-process-with-partial-path - low signal; Rule 21 targets shell=True (S602/S604/S605)
+    "SIM108", # ternary-instead-of-if - stylistic, too noisy
+    "PERF203", # try-except in loop - often unavoidable
+]
+
+[lint.per-file-ignores]
+# Test files may use asserts, fixtures, and looser conventions.
+"**/tests/**" = ["S101", "ARG", "N802", "N803"]
+# NOTE: examples/violations.py is intentionally NOT ignored -- validate.sh and
+# the compliance tests rely on it producing findings.
+
+[lint.flake8-bandit]
+# Rule 26: treat these as the insecure-API surface.
+check-typed-exception = true
