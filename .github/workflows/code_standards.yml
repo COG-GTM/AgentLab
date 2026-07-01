@@ -1,0 +1,54 @@
+name: Code Standards
+
+# Python Code Standards Compliance Framework (code-standards/).
+# The framework itself is enforced strictly (examples + compliance tests must
+# pass). The framework validator is also run against src/ in ADVISORY mode so
+# the tiered report is visible without blocking merges on the existing baseline.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+
+  code-standards:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -l {0}
+
+    steps:
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        run: uv sync --frozen --extra dev
+
+      - name: Install ruff (framework tooling)
+        run: uv pip install ruff
+
+      # --- Strict: the framework's own artifacts must be compliant ---
+      - name: Compliant example is formatted
+        run: uv run ruff format --config code-standards/ruff.toml --check code-standards/examples/compliant.py
+
+      - name: Compliant example passes analysis
+        run: uv run ruff check --config code-standards/ruff.toml code-standards/examples/compliant.py
+
+      - name: Compliance tests
+        run: uv run pytest code-standards/tests/ -v
+
+      # --- Advisory: report the framework's findings on the existing codebase ---
+      - name: Framework report on src/ (advisory)
+        continue-on-error: true
+        run: ./code-standards/scripts/validate.sh src/

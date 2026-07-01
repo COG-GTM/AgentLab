@@ -1,0 +1,56 @@
+{
+  // ==========================================================================
+  // Python Language-Server Configuration (Pyright)
+  // --------------------------------------------------------------------------
+  // Python equivalent of the framework's `.clangd` file. It configures the
+  // language server that powers IDE intelligence in Windsurf/VSCode:
+  // autocomplete, go-to-definition, hover, and real-time type diagnostics --
+  // the analog of clangd's real-time squiggles.
+  // Copy to the project root (as pyrightconfig.json) to activate, or point your
+  // editor's Python analysis at it. pyrightconfig.json supports JSONC comments.
+  // ==========================================================================
+
+  "include": [
+    "src"
+  ],
+  "exclude": [
+    "**/__pycache__",
+    "**/.venv",
+    "**/build",
+    "**/dist",
+    "**/node_modules",
+    "code-standards/examples/violations.py"
+  ],
+
+  "pythonVersion": "3.10",
+  "pythonPlatform": "All",
+
+  // Real-time analysis level. 'basic' keeps signal high and noise low,
+  // matching the framework's philosophy of actionable checks.
+  "typeCheckingMode": "basic",
+
+  // Rule 22: Optional / None access is the Python analog of null-dereference.
+  "reportOptionalMemberAccess": "warning",
+  "reportOptionalSubscript": "warning",
+  "reportOptionalCall": "warning",
+  "reportOptionalIterable": "warning",
+  "reportOptionalOperand": "warning",
+
+  // Rule 25: use-before-definition / unbound variables.
+  "reportUnboundVariable": "error",
+  "reportUndefinedVariable": "error",
+
+  // Rule 32: redundant / dead code.
+  "reportUnusedImport": "warning",
+  "reportUnusedVariable": "warning",
+  "reportUnnecessaryComparison": "warning",
+  "reportUnreachable": "warning",
+
+  // Rule 30: type-safety issues (narrowing analog).
+  "reportGeneralTypeIssues": "warning",
+  "reportArgumentType": "warning",
+
+  "useLibraryCodeForTypes": true,
+  "reportMissingImports": "none",
+  "reportMissingModuleSource": "none"
+}

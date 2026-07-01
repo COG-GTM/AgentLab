@@ -1,0 +1,277 @@
+# =============================================================================
+# Rule Severity Mapping (Python port)
+# =============================================================================
+# Maps ruff / pyright checks to severity levels for reporting and CI/CD
+# decisions. This is the Python instantiation of the Code Standards Compliance
+# Framework -- it preserves the framework's severity model, rule-ID numbering
+# (Critical 20-29, Major 30-39, Minor 40-49) and schema; only the underlying
+# `checks:` change from clang-tidy check names to ruff/pyright codes.
+#
+# Severity Levels:
+#   - critical: Block merge, must fix immediately (safety/security)
+#   - major: Requires review, should fix before release (potential bugs)
+#   - minor: Style/preference, fix when convenient (maintainability)
+#
+# Usage:
+#   - CI/CD can parse this file to determine pass/fail criteria
+#   - Windsurf rules reference these rule IDs
+#   - Reports can group issues by severity
+# =============================================================================
+
+version: "1.0"
+last_updated: "2026-07-01"
+language: "python"
+tools:
+  format: "ruff format"
+  analysis: "ruff check"
+  language_server: "pyright"
+
+severity_levels:
+
+  # ===========================================================================
+  # CRITICAL - Block merge, potential safety/security issues
+  # ===========================================================================
+  critical:
+    description: "Must fix before merge - safety or security risk"
+    action: "block_merge"
+    exit_code: 1
+    rules:
+
+      - rule_id: "Rule 20"
+        name: "Do not silently swallow errors"
+        rationale: "Bare/blind except hides failures, leading to undefined behavior (C analog: unchecked return values)"
+        checks:
+          - E722    # bare-except
+          - BLE001  # blind-except
+        examples:
+          bad: "try:\n    risky()\nexcept:\n    pass"
+          good: "try:\n    risky()\nexcept ValueError as err:\n    logger.error(\"risky failed: %s\", err)\n    raise"
+
+      - rule_id: "Rule 21"
+        name: "Prevent injection / unsafe input handling"
+        rationale: "Untrusted input flowing into shells/SQL/templates is the #1 source of security vulnerabilities (C analog: buffer overflow)"
+        checks:
+          - S602    # subprocess with shell=True
+          - S603    # subprocess without shell check
+          - S604    # call with shell=True
+          - S605    # start process with a shell
+          - S608    # hardcoded SQL expression
+        examples:
+          bad: "subprocess.run(f\"ls {user_input}\", shell=True)"
+          good: "subprocess.run([\"ls\", user_input], shell=False)"
+
+      - rule_id: "Rule 22"
+        name: "Guard optional / None values before use"
+        rationale: "Accessing attributes/items on None raises AttributeError/TypeError at runtime (C analog: null dereference)"
+        checks:
+          - reportOptionalMemberAccess  # pyright
+          - reportOptionalSubscript     # pyright
+        examples:
+          bad: "value = data.get(\"k\")\nreturn value.strip()"
+          good: "value = data.get(\"k\")\nif value is None:\n    return None\nreturn value.strip()"
+
+      - rule_id: "Rule 23"
+        name: "Prevent resource leaks"
+        rationale: "Files/sockets not closed leak descriptors and can crash long-running systems (C analog: malloc leak)"
+        checks:
+          - SIM115  # open-file-with-context-handler
+        examples:
+          bad: "f = open(path)\ndata = f.read()"
+          good: "with open(path) as f:\n    data = f.read()"
+
+      - rule_id: "Rule 24"
+        name: "Avoid dangerous shared mutable state"
+        rationale: "Mutable default arguments are shared across calls, causing subtle state-corruption bugs (C analog: use-after-free)"
+        checks:
+          - B006  # mutable-argument-default
+          - B008  # function-call-in-default-argument
+        examples:
+          bad: "def add(item, bucket=[]):\n    bucket.append(item)"
+          good: "def add(item, bucket=None):\n    if bucket is None:\n        bucket = []\n    bucket.append(item)"
+
+      - rule_id: "Rule 25"
+        name: "No undefined / use-before-assignment"
+        rationale: "Referencing names that may be unbound causes NameError/UnboundLocalError at runtime (C analog: uninitialized memory)"
+        checks:
+          - F821  # undefined-name
+          - F822  # undefined-name-in-all
+          - F823  # local-variable-referenced-before-assignment
+          - reportUnboundVariable  # pyright
+        examples:
+          bad: "if cond:\n    count = 10\nreturn count"
+          good: "count = 0\nif cond:\n    count = 10\nreturn count"
+
+      - rule_id: "Rule 26"
+        name: "Avoid insecure APIs"
+        rationale: "eval/exec/pickle/yaml.load/weak-hash/insecure-random enable code execution and crypto weaknesses (C analog: rand/strcpy)"
+        checks:
+          - S102  # exec-builtin
+          - S307  # suspicious-eval-usage
+          - S301  # suspicious-pickle-usage
+          - S506  # unsafe-yaml-load
+          - S324  # hashlib-insecure-hash-function
+          - S311  # suspicious-non-cryptographic-random-usage
+        examples:
+          bad: "token = random.random()\nobj = pickle.loads(untrusted)"
+          good: "token = secrets.token_hex(16)\nobj = json.loads(untrusted)"
+
+  # ===========================================================================
+  # MAJOR - Requires review, potential bugs
+  # ===========================================================================
+  major:
+    description: "Requires review - potential bugs or quality issues"
+    action: "require_review"
+    exit_code: 0
+    rules:
+
+      - rule_id: "Rule 30"
+        name: "Avoid unsafe comparisons / conversions"
+        rationale: "Comparing types with == or literals with `is` produces surprising results (C analog: narrowing conversions)"
+        checks:
+          - E721  # type-comparison
+          - F632  # is-literal
+        examples:
+          bad: "if type(x) == int:\n    ...\nif name is \"root\":\n    ..."
+          good: "if isinstance(x, int):\n    ...\nif name == \"root\":\n    ..."
+
+      - rule_id: "Rule 31"
+        name: "Consistent signatures & docstrings"
+        rationale: "Docstring params that drift from the signature confuse callers (C analog: inconsistent parameter names)"
+        checks:
+          - darglint  # docstring/signature consistency (existing repo tool)
+        examples:
+          bad: "def f(count):\n    \"\"\"Do it.\n\n    Args:\n        n: the number.\n    \"\"\""
+          good: "def f(count):\n    \"\"\"Do it.\n\n    Args:\n        count: the number.\n    \"\"\""
+
+      - rule_id: "Rule 32"
+        name: "Avoid redundant / dead code"
+        rationale: "Redefinitions and unused locals indicate logic errors or copy-paste mistakes"
+        checks:
+          - F811  # redefinition-of-unused
+          - F841  # unused-variable
+        examples:
+          bad: "result = compute()\nreturn other"
+          good: "return other"
+
+      - rule_id: "Rule 33"
+        name: "Prevent control-flow errors"
+        rationale: "break/continue/return outside their valid context is a structural bug (C analog: infinite loops)"
+        checks:
+          - F701  # break-outside-loop
+          - F702  # continue-outside-loop
+          - F706  # return-outside-function
+        examples:
+          bad: "def f():\n    x = 1\n    break"
+          good: "for x in items:\n    if done:\n        break"
+
+      - rule_id: "Rule 34"
+        name: "Concurrency / shared-state safety"
+        rationale: "Shared mutable defaults and globals cause data races in concurrent code"
+        checks:
+          - B006  # mutable-argument-default
+        examples:
+          bad: "def worker(cache={}):\n    ..."
+          good: "def worker(cache=None):\n    cache = {} if cache is None else cache"
+
+      - rule_id: "Rule 35"
+        name: "Performance issues"
+        rationale: "Unnecessary copies, list-in-comprehension, and inefficient loops waste CPU and memory"
+        checks:
+          - PERF401  # manual-list-comprehension
+          - PERF402  # manual-list-copy
+          - C400     # unnecessary-generator-list
+          - C401     # unnecessary-generator-set
+        examples:
+          bad: "out = []\nfor x in items:\n    out.append(x * 2)"
+          good: "out = [x * 2 for x in items]"
+
+  # ===========================================================================
+  # MINOR - Style/maintainability warnings
+  # ===========================================================================
+  minor:
+    description: "Style or maintainability - fix when convenient"
+    action: "warn_only"
+    exit_code: 0
+    rules:
+
+      - rule_id: "Rule 40"
+        name: "Consistent formatting"
+        rationale: "Consistent style improves readability and reduces merge conflicts"
+        checks:
+          - "ruff-format"
+        enforced_by: "ruff.toml ([format], line-length 100, Black-compatible)"
+
+      - rule_id: "Rule 41"
+        name: "Naming conventions"
+        rationale: "Consistent naming makes code more predictable and searchable"
+        checks:
+          - N  # pep8-naming
+        conventions:
+          functions: "snake_case"
+          variables: "snake_case"
+          constants: "UPPER_CASE"
+          classes: "PascalCase"
+
+      - rule_id: "Rule 42"
+        name: "Explicit comparisons"
+        rationale: "Comparing to None/True/False with == is error-prone (C analog: always use braces / no implicit)"
+        checks:
+          - E711  # none-comparison
+          - E712  # true-false-comparison
+          - E713  # not-in-test
+          - E714  # not-is-test
+        examples:
+          bad: "if x == None:\n    ..."
+          good: "if x is None:\n    ..."
+
+      - rule_id: "Rule 43"
+        name: "Simplify boolean expressions"
+        rationale: "Complex boolean expressions are error-prone and hard to read"
+        checks:
+          - SIM  # flake8-simplify
+        examples:
+          bad: "if flag == True:\n    ..."
+          good: "if flag:\n    ..."
+
+      - rule_id: "Rule 44"
+        name: "Avoid else after return"
+        rationale: "Unnecessary else after return/raise increases indentation"
+        checks:
+          - RET505  # superfluous-else-return
+          - RET506  # superfluous-else-raise
+          - RET507  # superfluous-else-continue
+          - RET508  # superfluous-else-break
+        examples:
+          bad: "if error:\n    return -1\nelse:\n    process()"
+          good: "if error:\n    return -1\nprocess()"
+
+      - rule_id: "Rule 45"
+        name: "Use modern syntax"
+        rationale: "Modern idioms are clearer and safer (Python analog of the C++ 'use nullptr' rule)"
+        checks:
+          - UP  # pyupgrade
+        examples:
+          bad: "d = dict()\ns = \"%s\" % name"
+          good: "d = {}\ns = f\"{name}\""
+
+      - rule_id: "Rule 46"
+        name: "Remove unused imports / arguments"
+        rationale: "Unused imports and parameters indicate dead code or missing implementation"
+        checks:
+          - F401  # unused-import
+          - ARG   # flake8-unused-arguments
+        examples:
+          bad: "import os\n\ndef process(x, unused):\n    return x"
+          good: "def process(x):\n    return x"
+
+# =============================================================================
+# SUPPRESSION GUIDANCE
+# =============================================================================
+suppression:
+  single_line: "# noqa: <CODE>"
+  block: "not supported by ruff - use per-line # noqa or per-file-ignores in ruff.toml"
+  file_level: "# ruff: noqa: <CODE>  (at top of file)"
+  notes:
+    - "Always add a comment explaining why the suppression is needed"
+    - "Prefer fixing the issue over suppressing it"
+    - "Suppressions should be reviewed in code review"

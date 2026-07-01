@@ -1,0 +1,54 @@
+{
+  // ==========================================================================
+  // VSCode/Windsurf Settings for the Python Code Standards Framework
+  // ==========================================================================
+  // Copy this file to .vscode/settings.json in your project (or merge these
+  // keys into your existing settings). Requires the "Ruff" (charliermarsh.ruff)
+  // and "Pylance"/"Pyright" extensions.
+  // ==========================================================================
+
+  // ---------------------------------------------------------------------------
+  // Formatting (Rule 40) - ruff format, Black-compatible
+  // ---------------------------------------------------------------------------
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll.ruff": "explicit",
+      "source.organizeImports.ruff": "explicit"
+    },
+    "editor.tabSize": 4,
+    "editor.insertSpaces": true
+  },
+
+  // ---------------------------------------------------------------------------
+  // Ruff (Rules 20-46 static analysis) - point at the framework config
+  // ---------------------------------------------------------------------------
+  "ruff.configuration": "code-standards/ruff.toml",
+  "ruff.nativeServer": "on",
+  "ruff.lint.enable": true,
+
+  // ---------------------------------------------------------------------------
+  // Pyright / Pylance (Rules 22, 25, 30, 32 - IDE intelligence, the .clangd analog)
+  // ---------------------------------------------------------------------------
+  "python.analysis.typeCheckingMode": "basic",
+  "python.analysis.diagnosticMode": "workspace",
+  "python.analysis.inlayHints.functionReturnTypes": true,
+  "python.analysis.inlayHints.variableTypes": true,
+
+  // ---------------------------------------------------------------------------
+  // Testing
+  // ---------------------------------------------------------------------------
+  "python.testing.pytestEnabled": true,
+  "python.testing.unittestEnabled": false,
+
+  // ---------------------------------------------------------------------------
+  // Exclude from Search/Watch
+  // ---------------------------------------------------------------------------
+  "files.watcherExclude": {
+    "**/.git/**": true,
+    "**/__pycache__/**": true,
+    "**/.venv/**": true,
+    "**/build/**": true
+  }
+}
