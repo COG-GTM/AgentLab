@@ -35,7 +35,7 @@ benchmark = DEFAULT_BENCHMARKS["miniwob_tiny_test"]()
 ## Number of parallel jobs
 n_jobs = 4  # Make sure to use 1 job when debugging in VSCode
 
-if __name__ == "__main__":  # necessary for dask backend
+if __name__ == "__main__":  # necessary for multiprocessing backends
 
     # A study evaluates multiple agents on a benchmark
     study = Study(agent_configs, benchmark)

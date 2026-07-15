@@ -29,8 +29,6 @@ classifiers = [
 ]
 dependencies = [
     "pydantic~=2.9",
-    "dask",
-    "distributed",
     "browsergym>=0.7.1",
     "joblib>=1.2.0",
     "openai>=1.7,<2",

@@ -160,39 +160,6 @@ class SelfHostedModelArgs(BaseModelArgs):
             raise ValueError(f"Backend {self.backend} is not supported")
 
 
-@dataclass
-class ChatModelArgs(BaseModelArgs):
-    """Object added for backward compatibility with the old ChatModelArgs."""
-
-    model_path: str = None
-    model_url: str = None
-    model_size: str = None
-    training_total_tokens: int = None
-    hf_hosted: bool = False
-    is_model_operational: str = False
-    sliding_window: bool = False
-    n_retry_server: int = 4
-    infer_tokens_length: bool = False
-    vision_support: bool = False
-    shard_support: bool = True
-    extra_tgi_args: dict = None
-    tgi_image: str = None
-    info: dict = None
-
-    def __post_init__(self):
-        import warnings
-
-        warnings.simplefilter("always", DeprecationWarning)
-        warnings.warn(
-            "ChatModelArgs is deprecated and used only for xray. Use one of the specific model args classes instead.",
-            DeprecationWarning,
-        )
-        warnings.simplefilter("default", DeprecationWarning)
-
-    def make_model(self):
-        pass
-
-
 def _extract_wait_time(error_message, min_retry_wait_time=60):
     """Extract the wait time from an OpenAI RateLimitError message."""
     match = re.search(r"try again in (\d+(\.\d+)?)s", error_message)

@@ -50,7 +50,7 @@ n_jobs = 4  # Make sure to use 1 job when debugging in VSCode
 # n_jobs = -1  # to use all available cores
 
 
-if __name__ == "__main__":  # necessary for dask backend
+if __name__ == "__main__":  # necessary for multiprocessing backends
 
     if reproducibility_mode:
         [a.set_reproducibility_mode() for a in agent_args]
