@@ -286,6 +286,16 @@ Here's a list of relevant env. variables that are used by AgentLab:
 - `AGENTLAB_EXP_ROOT`, desired path for your experiments to be stored, defaults to `~/agentlab-results`.
 - `AGENTXRAY_SHARE_GRADIO`, which prompts AgentXRay to open a public tunnel on launch.
 
+## Contributing
+
+For development, install the dev extras and the pre-commit hooks so formatting
+(black) and docstring checks (darglint) run automatically before each commit:
+
+```bash
+pip install -e ".[dev]"
+pre-commit install
+```
+
 ## Misc
 
 if you want to download HF models more quickly
