@@ -334,3 +334,4 @@ We use the AgentLab framework to run and manage our experiments \cite{workarena2
 ```
 
 <!-- spec-13746513: test commit -->
+<!-- spec-13746513: readme update (feature) -->
