@@ -270,6 +270,166 @@ def test_message_merge_text_image():
     assert message["content"][2]["text"] == "This is another test.\nGoodbye, world!"
 
 
+class FakeRateLimitError(Exception):
+    pass
+
+
+class FakeAPIError(Exception):
+    def __init__(self, status_code):
+        super().__init__(f"api error with status {status_code}")
+        self.status_code = status_code
+
+
+def get_fake_status_code(exception):
+    return exception.status_code
+
+
+@pytest.fixture
+def sleep_calls(monkeypatch):
+    calls = []
+    monkeypatch.setattr(llm_utils.time, "sleep", lambda delay: calls.append(delay))
+    return calls
+
+
+def call_with_retries(client_function, is_response_valid_fn=lambda response: True, **kwargs):
+    return llm_utils.generic_call_api_with_retries(
+        client_function=client_function,
+        api_params={},
+        is_response_valid_fn=is_response_valid_fn,
+        rate_limit_exceptions=(FakeRateLimitError,),
+        api_error_exceptions=(FakeAPIError,),
+        get_status_code_fn=get_fake_status_code,
+        max_retries=kwargs.pop("max_retries", 4),
+        initial_retry_delay_seconds=kwargs.pop("initial_retry_delay_seconds", 1),
+        **kwargs,
+    )
+
+
+def test_generic_retries_returns_valid_response_without_sleeping(sleep_calls):
+    client_function = Mock(return_value="response")
+
+    assert call_with_retries(client_function) == "response"
+    assert client_function.call_count == 1
+    assert sleep_calls == []
+
+
+def test_generic_retries_recovers_from_rate_limit_error(sleep_calls):
+    client_function = Mock(side_effect=[FakeRateLimitError("slow down"), "response"])
+
+    assert call_with_retries(client_function) == "response"
+    assert client_function.call_count == 2
+    assert sleep_calls == [2]
+
+
+@pytest.mark.parametrize("status_code", [429, 500, 503])
+def test_generic_retries_recovers_from_retriable_status_codes(sleep_calls, status_code):
+    client_function = Mock(side_effect=[FakeAPIError(status_code), "response"])
+
+    assert call_with_retries(client_function) == "response"
+    assert client_function.call_count == 2
+    assert sleep_calls == [2]
+
+
+@pytest.mark.parametrize("status_code", [400, 401, 404])
+def test_generic_retries_reraises_non_retriable_status_codes(sleep_calls, status_code):
+    client_function = Mock(side_effect=FakeAPIError(status_code))
+
+    with pytest.raises(FakeAPIError):
+        call_with_retries(client_function)
+
+    assert client_function.call_count == 1
+    assert sleep_calls == []
+
+
+def test_generic_retries_reraises_when_status_code_is_unavailable(sleep_calls):
+    client_function = Mock(side_effect=FakeAPIError(429))
+
+    with pytest.raises(FakeAPIError):
+        llm_utils.generic_call_api_with_retries(
+            client_function=client_function,
+            api_params={},
+            is_response_valid_fn=lambda response: True,
+            rate_limit_exceptions=(FakeRateLimitError,),
+            api_error_exceptions=(FakeAPIError,),
+            get_status_code_fn=Mock(side_effect=AttributeError("no status code")),
+            max_retries=4,
+            initial_retry_delay_seconds=1,
+        )
+
+    assert client_function.call_count == 1
+    assert sleep_calls == []
+
+
+def test_generic_retries_reraises_unexpected_exception(sleep_calls):
+    client_function = Mock(side_effect=KeyError("unexpected"))
+
+    with pytest.raises(KeyError):
+        call_with_retries(client_function)
+
+    assert client_function.call_count == 1
+    assert sleep_calls == []
+
+
+def test_generic_retries_on_invalid_response_content(sleep_calls):
+    client_function = Mock(side_effect=["invalid", "invalid", "valid"])
+
+    result = call_with_retries(
+        client_function, is_response_valid_fn=lambda response: response == "valid"
+    )
+
+    assert result == "valid"
+    assert client_function.call_count == 3
+    assert sleep_calls == [1, 2]
+
+
+def test_generic_retries_raises_runtime_error_when_exhausted_by_invalid_responses(sleep_calls):
+    client_function = Mock(return_value="invalid")
+
+    with pytest.raises(RuntimeError):
+        call_with_retries(
+            client_function,
+            is_response_valid_fn=lambda response: False,
+            max_retries=3,
+        )
+
+    assert client_function.call_count == 3
+    assert sleep_calls == [1, 2]
+
+
+def test_generic_retries_raises_runtime_error_when_exhausted_by_rate_limits(sleep_calls):
+    client_function = Mock(side_effect=FakeRateLimitError("slow down"))
+
+    with pytest.raises(RuntimeError):
+        call_with_retries(client_function, max_retries=3)
+
+    assert client_function.call_count == 3
+    assert sleep_calls == [2, 4]
+
+
+def test_generic_retries_raises_runtime_error_when_exhausted_by_api_errors(sleep_calls):
+    client_function = Mock(side_effect=FakeAPIError(500))
+
+    with pytest.raises(RuntimeError):
+        call_with_retries(client_function, max_retries=3)
+
+    assert client_function.call_count == 3
+    assert sleep_calls == [2, 4]
+
+
+def test_generic_retries_backoff_is_exponential_and_capped(sleep_calls):
+    client_function = Mock(side_effect=FakeRateLimitError("slow down"))
+
+    with pytest.raises(RuntimeError):
+        call_with_retries(
+            client_function,
+            max_retries=6,
+            initial_retry_delay_seconds=10,
+            max_retry_delay_seconds=100,
+        )
+
+    assert sleep_calls == [20, 40, 80, 100, 100]
+
+
 if __name__ == "__main__":
     # test_retry_parallel()
     # test_rate_limit_max_wait_time()
