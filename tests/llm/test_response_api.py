@@ -159,12 +159,14 @@ def create_mock_anthropic_response(
         text_block.text = text_content
         response.content.append(text_block)
     if tool_use:
-        tool_use_block = MagicMock(spec=anthropic.types.ToolUseBlock)
-        tool_use_block.type = "tool_use"
-        tool_use_block.id = tool_use["id"]
-        tool_use_block.name = tool_use["name"]
-        tool_use_block.input = tool_use["input"]
-        response.content.append(tool_use_block)
+        tool_uses = tool_use if isinstance(tool_use, list) else [tool_use]
+        for tu in tool_uses:
+            tool_use_block = MagicMock(spec=anthropic.types.ToolUseBlock)
+            tool_use_block.type = "tool_use"
+            tool_use_block.id = tu["id"]
+            tool_use_block.name = tu["name"]
+            tool_use_block.input = tu["input"]
+            response.content.append(tool_use_block)
     response.usage = MagicMock()
     response.usage.input_tokens = input_tokens
     response.usage.output_tokens = output_tokens
@@ -399,6 +401,95 @@ def test_openai_response_model_parse_and_cost():
     assert parsed_output.raw_response == mock_api_resp
     assert global_tracker.stats["input_tokens"] == 70
     assert global_tracker.stats["output_tokens"] == 40
+
+
+def test_convert_multiactions_to_agentlab_action_format():
+    from agentlab.llm.response_api import AgentlabAction
+
+    convert = AgentlabAction.convert_multiactions_to_agentlab_action_format
+    assert convert([]) is None
+    assert convert(["click('a')"]) == "click('a')"
+    assert convert(["click('a')", "fill('b', 'text')"]) == "click('a')\nfill('b', 'text')"
+
+
+def test_openai_chat_completion_model_parse_multi_action():
+    args = OpenAIChatModelArgs(model_name="gpt-3.5-turbo")
+    with patch("agentlab.llm.response_api.OpenAI") as mock_openai_class:
+        mock_openai_class.return_value = MagicMock()
+        model = args.make_model()
+
+    mock_response = create_mock_openai_chat_completion(
+        tool_calls=[
+            {
+                "id": "call_1",
+                "type": "function",
+                "function": {"name": "get_weather", "arguments": '{"location": "Paris"}'},
+            },
+            {
+                "id": "call_2",
+                "type": "function",
+                "function": {"name": "get_weather", "arguments": '{"location": "Delhi"}'},
+            },
+        ],
+    )
+
+    with patch.object(model.client.chat.completions, "create", return_value=mock_response):
+        messages = [OpenAIChatCompletionAPIMessageBuilder.user().add_text("Weather?")]
+        parsed_output = model(APIPayload(messages=messages))
+
+    assert len(parsed_output.tool_calls) == 2
+    assert parsed_output.action == "get_weather(location='Paris')\nget_weather(location='Delhi')"
+
+
+def test_openai_response_model_parse_multi_action():
+    args = OpenAIResponseModelArgs(model_name="gpt-4.1")
+
+    mock_api_resp = create_mock_openai_responses_api_response(
+        outputs=[
+            {
+                "type": "function_call",
+                "name": "get_weather",
+                "arguments": '{"location": "Paris"}',
+                "call_id": "call_1",
+            },
+            {
+                "type": "function_call",
+                "name": "get_weather",
+                "arguments": '{"location": "Delhi"}',
+                "call_id": "call_2",
+            },
+        ],
+    )
+
+    with patch("agentlab.llm.response_api.OpenAI") as mock_openai_class:
+        mock_openai_class.return_value = MagicMock()
+        model = args.make_model()
+
+    with patch.object(model.client.responses, "create", return_value=mock_api_resp):
+        messages = [OpenAIResponseAPIMessageBuilder.user().add_text("Weather?")]
+        parsed_output = model(APIPayload(messages=messages))
+
+    assert len(parsed_output.tool_calls) == 2
+    assert parsed_output.action == "get_weather(location='Paris')\nget_weather(location='Delhi')"
+
+
+def test_claude_response_model_parse_multi_action():
+    args = ClaudeResponseModelArgs(model_name="claude-3-haiku-20240307")
+    model = args.make_model()
+
+    mock_anthropic_api_response = create_mock_anthropic_response(
+        tool_use=[
+            {"id": "tool_1", "name": "get_weather", "input": {"location": "Paris"}},
+            {"id": "tool_2", "name": "get_weather", "input": {"location": "Delhi"}},
+        ],
+    )
+
+    with patch.object(model.client.messages, "create", return_value=mock_anthropic_api_response):
+        messages = [AnthropicAPIMessageBuilder.user().add_text("Weather?")]
+        parsed_output = model(APIPayload(messages=messages))
+
+    assert len(parsed_output.tool_calls) == 2
+    assert parsed_output.action == "get_weather(location='Paris')\nget_weather(location='Delhi')"
 
 
 # --- Test Response Models (Pricy - require API keys and actual calls) ---
