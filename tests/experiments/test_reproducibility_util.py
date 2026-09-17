@@ -1,14 +1,10 @@
+import csv
 import json
-import tempfile
-import time
-from pathlib import Path
 
-import bgym
+import pandas as pd
 import pytest
 from bgym import DEFAULT_BENCHMARKS
 
-from agentlab.agents.generic_agent import AGENT_4o_MINI
-from agentlab.analyze import inspect_results
 from agentlab.experiments import reproducibility_util
 
 
@@ -39,68 +35,162 @@ def test_get_reproducibility_info(benchmark_name):
     assert "browsergym__local_modifications" in info
 
 
-# def test_save_reproducibility_info():
-#     with tempfile.TemporaryDirectory() as tmp_dir:
-#         tmp_dir = Path(tmp_dir)
+def _make_info(agent_names=("agent_a",), **overrides):
+    info = {
+        "agent_names": list(agent_names),
+        "benchmark": "miniwob",
+        "benchmark_version": "0.1.0",
+        "date": "2024-01-01_00-00-00",
+        "avg_reward": None,
+        "std_err": None,
+        "n_err": None,
+        "n_completed": None,
+        "comment": None,
+        "agentlab_version": "0.3.1",
+        "agentlab_git_hash": "abc123",
+        "agentlab__local_modifications": "",
+    }
+    info.update(overrides)
+    return info
 
-#         info1 = reproducibility_util.save_reproducibility_info(
-#             study_dir=tmp_dir,
-#             info=reproducibility_util.get_reproducibility_info(
-#                 agents_args="GenericAgent",
-#                 benchmark_name="miniwob",
-#                 ignore_changes=True,
-#             ),
-#         )
-#         time.sleep(1)  # make sure the date changes by at least 1s
 
-#         # this should overwrite the previous info since they are the same beside
-#         # the date
-#         info2 = reproducibility_util.save_reproducibility_info(
-#             study_dir=tmp_dir,
-#             info=reproducibility_util.get_reproducibility_info(
-#                 agents_args="GenericAgent",
-#                 benchmark_name="miniwob",
-#                 ignore_changes=True,
-#             ),
-#         )
+def _make_report_df(agent_names=("agent_a",), n_err=0, n_completed="3/3"):
+    return pd.DataFrame(
+        {
+            "avg_reward": [0.5] * len(agent_names),
+            "std_err": [0.1] * len(agent_names),
+            "n_err": [n_err] * len(agent_names),
+            "n_completed": [n_completed] * len(agent_names),
+        },
+        index=pd.Index(list(agent_names), name="agent.agent_name"),
+    )
 
-#         reproducibility_util.assert_compatible(info1, info2)
 
-#         # this should not overwrite info2 as the agent name is different, it
-#         # should raise an error
-#         with pytest.raises(ValueError):
-#             reproducibility_util.save_reproducibility_info(
-#                 study_dir=tmp_dir,
-#                 info=reproducibility_util.get_reproducibility_info(
-#                     agents_args="GenericAgent_alt",
-#                     benchmark_name="miniwob",
-#                     ignore_changes=True,
-#                 ),
-#             )
+def test_assert_compatible_ignores_volatile_keys():
+    info = _make_info()
+    old_info = _make_info(
+        date="2023-05-05_12-00-00", avg_reward=0.9, std_err=0.2, n_err=4, n_completed="2/3"
+    )
 
-#         # load json
-#         info3 = reproducibility_util.load_reproducibility_info(tmp_dir)
+    reproducibility_util.assert_compatible(info, old_info)
 
-#         assert info2 == info3
-#         assert info1 != info3
 
-#         test_study_dir = Path(__file__).parent.parent / "data" / "test_study"
-#         result_df = inspect_results.load_result_df(test_study_dir, progress_fn=None)
-#         report_df = inspect_results.summarize_study(result_df)
+def test_assert_compatible_raises_on_changed_key():
+    info = _make_info()
+    old_info = _make_info(benchmark_version="0.2.0")
 
-#         with pytest.raises(ValueError):
-#             reproducibility_util.append_to_journal(
-#                 info3, report_df, journal_path=tmp_dir / "journal.csv"
-#             )
+    with pytest.raises(ValueError, match="benchmark_version"):
+        reproducibility_util.assert_compatible(info, old_info)
 
-#         reproducibility_util.append_to_journal(
-#             info3, report_df, journal_path=tmp_dir / "journal.csv", strict_reproducibility=False
-#         )
 
-#         print((tmp_dir / "journal.csv").read_text())
+def test_assert_compatible_warns_when_not_strict(caplog):
+    info = _make_info()
+    old_info = _make_info(agentlab_git_hash="def456")
+
+    reproducibility_util.assert_compatible(info, old_info, raise_if_incompatible=False)
+
+    assert "agentlab_git_hash" in caplog.text
+
+
+def test_verify_report_rejects_unknown_agent_names():
+    report_df = _make_report_df(agent_names=("agent_a",))
+
+    with pytest.raises(ValueError, match="do not match"):
+        reproducibility_util._verify_report(report_df, ["agent_b"])
+
+
+def test_verify_report_rejects_duplicate_agent_names():
+    report_df = _make_report_df(agent_names=("agent_a", "agent_a"))
+
+    with pytest.raises(ValueError, match="Duplicate agent names"):
+        reproducibility_util._verify_report(report_df, ["agent_a", "agent_a"])
+
+
+@pytest.mark.parametrize(
+    "n_err,n_completed,match",
+    [(2, "3/3", "2 errors"), (0, "2/3", "completed tasks")],
+)
+def test_verify_report_raises_on_incomplete_study(n_err, n_completed, match):
+    report_df = _make_report_df(n_err=n_err, n_completed=n_completed)
+
+    with pytest.raises(ValueError, match=match):
+        reproducibility_util._verify_report(report_df, ["agent_a"])
+
+
+def test_verify_report_warns_when_not_strict(caplog):
+    report_df = _make_report_df(n_err=2, n_completed="2/3")
+
+    verified_df = reproducibility_util._verify_report(
+        report_df, ["agent_a"], strict_reproducibility=False
+    )
+
+    assert verified_df.index.name == "agent.agent_name"
+    assert "2 errors" in caplog.text
+    assert "completed tasks" in caplog.text
+
+
+def test_append_to_journal_creates_then_appends(tmp_path):
+    journal_path = tmp_path / "journal.csv"
+
+    reproducibility_util.append_to_journal(
+        _make_info(["agent_a"]), _make_report_df(["agent_a"]), journal_path=journal_path
+    )
+
+    rows = list(csv.reader(journal_path.read_text().splitlines()))
+    headers = rows[0]
+    assert "agent_name" in headers and "agent_names" not in headers
+    assert len(rows) == 2
+    first_row = dict(zip(headers, rows[1]))
+    assert first_row["agent_name"] == "agent_a"
+    assert first_row["avg_reward"] == "0.5"
+    assert first_row["n_completed"] == "3/3"
+
+    reproducibility_util.append_to_journal(
+        _make_info(["agent_a", "agent_b"]),
+        _make_report_df(["agent_a", "agent_b"]),
+        journal_path=journal_path,
+    )
+
+    rows = list(csv.reader(journal_path.read_text().splitlines()))
+    assert rows[0] == headers  # headers are reused, not rewritten
+    assert len(rows) == 4
+    assert [row[headers.index("agent_name")] for row in rows[1:]] == [
+        "agent_a",
+        "agent_a",
+        "agent_b",
+    ]
+
+
+def test_append_to_journal_rejects_agent_count_mismatch(tmp_path):
+    with pytest.raises(ValueError, match="Mismatch between the number of agents"):
+        reproducibility_util.append_to_journal(
+            _make_info(["agent_a", "agent_b"]),
+            _make_report_df(["agent_a"]),
+            journal_path=tmp_path / "journal.csv",
+        )
+
+
+def test_append_to_journal_propagates_verification_error(tmp_path):
+    journal_path = tmp_path / "journal.csv"
+
+    with pytest.raises(ValueError, match="1 errors"):
+        reproducibility_util.append_to_journal(
+            _make_info(["agent_a"]),
+            _make_report_df(["agent_a"], n_err=1),
+            journal_path=journal_path,
+        )
+
+    assert not journal_path.exists()
+
+    reproducibility_util.append_to_journal(
+        _make_info(["agent_a"]),
+        _make_report_df(["agent_a"], n_err=1),
+        journal_path=journal_path,
+        strict_reproducibility=False,
+    )
+
+    assert len(journal_path.read_text().strip().splitlines()) == 2
 
 
 if __name__ == "__main__":
-    # test_set_temp()
     test_get_reproducibility_info("miniwob")
-    # test_save_reproducibility_info()
