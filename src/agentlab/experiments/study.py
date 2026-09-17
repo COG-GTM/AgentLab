@@ -351,6 +351,8 @@ class Study(AbstractStudy):
                 logger.info(f"Study {self.name} finished.")
                 break
 
+            last_error_count = n_error
+
         logger.info("# Error Report:\n-------------\n\n" + error_report)
 
         if n_incomplete != 0:
