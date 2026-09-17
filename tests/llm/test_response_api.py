@@ -16,6 +16,8 @@ from agentlab.llm.response_api import (
     OpenAIChatModelArgs,
     OpenAIResponseAPIMessageBuilder,
     OpenAIResponseModelArgs,
+    ToolCall,
+    ToolCalls,
 )
 
 
@@ -786,6 +788,194 @@ EDGE_CASES = [
         "process_data(nested={'level1': {'level2': {'level3': [1, 2, {'deep': True}]}}}, circular_ref_like={'a': {'b': {'c': 'back_to_start'}}})",
     ),
 ]
+
+
+# --- Test tool response formatting (multi-turn tool use) ---
+
+
+def make_responses_api_tool_calls(call_type="function_call", call_id="call_abc", response=None):
+    """Build a ToolCalls mimicking what OpenAIResponseModel returns for a tool call."""
+    raw_call = MagicMock()
+    raw_call.type = call_type
+    raw_call.call_id = call_id
+    raw_response = MagicMock()
+    raw_response.output = [raw_call]
+    tool_call = ToolCall(name="get_weather", arguments={"location": "Paris"}, raw_call=raw_call)
+    tool_call.tool_response = response
+    return ToolCalls(tool_calls=[tool_call], raw_calls=raw_response)
+
+
+def make_anthropic_tool_calls(tool_use_id="toolu_abc", response=None):
+    """Build a ToolCalls mimicking what ClaudeResponseModel returns for a tool call."""
+    raw_call = MagicMock()
+    raw_call.id = tool_use_id
+    raw_response = MagicMock()
+    raw_response.content = [raw_call]
+    tool_call = ToolCall(name="get_weather", arguments={"location": "Paris"}, raw_call=raw_call)
+    tool_call.tool_response = response
+    return ToolCalls(tool_calls=[tool_call], raw_calls=raw_response)
+
+
+def make_chat_completion_tool_calls(call_id="call_abc", response=None):
+    """Build a ToolCalls mimicking what OpenAIChatCompletionModel returns for a tool call."""
+    raw_call = {
+        "id": call_id,
+        "type": "function",
+        "function": {"name": "get_weather", "arguments": '{"location": "Paris"}'},
+    }
+    raw_response = create_mock_openai_chat_completion(content=None, tool_calls=[raw_call])
+    tool_call = ToolCall(name="get_weather", arguments={"location": "Paris"}, raw_call=raw_call)
+    tool_call.tool_response = response
+    return ToolCalls(tool_calls=[tool_call], raw_calls=raw_response)
+
+
+def test_openai_response_api_builder_function_call_output():
+    tool_calls = make_responses_api_tool_calls(response={"text": "Its sunny! 25C"})
+    messages = OpenAIResponseAPIMessageBuilder.add_responded_tool_calls(
+        tool_calls
+    ).prepare_message()
+
+    assert messages[0] is tool_calls.raw_calls.output[0]
+    assert messages[1] == {
+        "type": "function_call_output",
+        "call_id": "call_abc",
+        "output": "Its sunny! 25C",
+    }
+
+
+def test_openai_response_api_builder_computer_call_output():
+    tool_calls = make_responses_api_tool_calls(
+        call_type="computer_call",
+        call_id="call_cua",
+        response={"image": "data:image/png;base64,SCREENSHOT"},
+    )
+    messages = OpenAIResponseAPIMessageBuilder.add_responded_tool_calls(
+        tool_calls
+    ).prepare_message()
+
+    assert messages[1] == {
+        "type": "computer_call_output",
+        "call_id": "call_cua",
+        "output": {"type": "input_image", "image_url": "data:image/png;base64,SCREENSHOT"},
+    }
+
+
+def test_openai_response_api_builder_rejects_image_in_function_call():
+    tool_calls = make_responses_api_tool_calls(response={"image": "data:image/png;base64,IMG"})
+    builder = OpenAIResponseAPIMessageBuilder.add_responded_tool_calls(tool_calls)
+    with pytest.raises(AssertionError):
+        builder.prepare_message()
+
+
+def test_openai_response_api_builder_rejects_text_in_computer_call():
+    tool_calls = make_responses_api_tool_calls(
+        call_type="computer_call", response={"text": "clicked"}
+    )
+    builder = OpenAIResponseAPIMessageBuilder.add_responded_tool_calls(tool_calls)
+    with pytest.raises(AssertionError):
+        builder.prepare_message()
+
+
+def test_anthropic_api_builder_tool_result():
+    tool_calls = make_anthropic_tool_calls(response={"text": "Its sunny! 25C"})
+    messages = AnthropicAPIMessageBuilder.add_responded_tool_calls(tool_calls).prepare_message()
+
+    assert len(messages) == 2
+    assert messages[0] == {"role": "assistant", "content": tool_calls.raw_calls.content}
+    assert messages[1] == {
+        "role": "user",
+        "content": [
+            {
+                "type": "tool_result",
+                "tool_use_id": "toolu_abc",
+                "content": "Its sunny! 25C",
+            }
+        ],
+    }
+
+
+def test_anthropic_api_builder_rejects_image_tool_response():
+    tool_calls = make_anthropic_tool_calls(response={"image": "data:image/png;base64,IMG"})
+    builder = AnthropicAPIMessageBuilder.add_responded_tool_calls(tool_calls)
+    with pytest.raises(AssertionError):
+        builder.prepare_message()
+
+
+def test_openai_chat_completion_api_builder_tool_response():
+    tool_calls = make_chat_completion_tool_calls(response={"text": "Its sunny! 25C"})
+    messages = OpenAIChatCompletionAPIMessageBuilder.add_responded_tool_calls(
+        tool_calls
+    ).prepare_message()
+
+    assert len(messages) == 2
+    assert messages[0] is tool_calls.raw_calls.choices[0].message
+    assert messages[1] == {
+        "name": "get_weather",
+        "role": "tool",
+        "tool_call_id": "call_abc",
+        "content": "Its sunny! 25C",
+    }
+
+
+def test_openai_chat_completion_api_builder_rejects_image_tool_response():
+    tool_calls = make_chat_completion_tool_calls(response={"image": "data:image/png;base64,IMG"})
+    builder = OpenAIChatCompletionAPIMessageBuilder.add_responded_tool_calls(tool_calls)
+    with pytest.raises(AssertionError):
+        builder.prepare_message()
+
+
+@pytest.mark.parametrize(
+    "builder_cls",
+    [
+        OpenAIResponseAPIMessageBuilder,
+        AnthropicAPIMessageBuilder,
+        OpenAIChatCompletionAPIMessageBuilder,
+    ],
+)
+def test_add_responded_tool_calls_requires_all_responses(builder_cls):
+    tool_calls = make_responses_api_tool_calls(response=None)
+    assert not tool_calls.all_responses_set
+    with pytest.raises(AssertionError):
+        builder_cls.add_responded_tool_calls(tool_calls)
+
+
+@pytest.mark.parametrize(
+    "builder_cls",
+    [
+        OpenAIResponseAPIMessageBuilder,
+        AnthropicAPIMessageBuilder,
+        OpenAIChatCompletionAPIMessageBuilder,
+    ],
+)
+def test_handle_tool_call_without_responded_tool_calls(builder_cls):
+    builder = builder_cls("tool")
+    with pytest.raises(ValueError):
+        builder.prepare_message()
+
+
+def test_openai_response_api_builder_multiple_tool_responses():
+    raw_calls = [MagicMock(), MagicMock()]
+    for i, raw_call in enumerate(raw_calls):
+        raw_call.type = "function_call"
+        raw_call.call_id = f"call_{i}"
+    raw_response = MagicMock()
+    raw_response.output = raw_calls
+    tool_calls = ToolCalls(
+        tool_calls=[
+            ToolCall(name="get_weather", arguments={}, raw_call=raw_call) for raw_call in raw_calls
+        ],
+        raw_calls=raw_response,
+    )
+    for i, tool_call in enumerate(tool_calls):
+        tool_call.response_text(f"response {i}")
+
+    messages = OpenAIResponseAPIMessageBuilder.add_responded_tool_calls(
+        tool_calls
+    ).prepare_message()
+
+    assert messages[:2] == raw_calls
+    assert [m["call_id"] for m in messages[2:]] == ["call_0", "call_1"]
+    assert [m["output"] for m in messages[2:]] == ["response 0", "response 1"]
 
 
 def test_tool_call_to_python_code():
