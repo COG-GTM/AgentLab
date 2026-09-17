@@ -270,6 +270,52 @@ def test_message_merge_text_image():
     assert message["content"][2]["text"] == "This is another test.\nGoodbye, world!"
 
 
+class FakeLangchainMessage:
+    def __init__(self, type: str, content: str):
+        self.type = type
+        self.content = content
+
+
+def test_messages_to_dict_dict_and_str():
+    messages = llm_utils.messages_to_dict(
+        [{"role": "system", "content": "be nice"}, "a bare string"]
+    )
+    assert isinstance(messages, llm_utils.Discussion)
+    assert messages.messages[0]["role"] == "system"
+    assert messages.messages[0]["content"] == "be nice"
+    assert messages.messages[1]["role"] == "<unknown role>"
+    assert messages.messages[1]["content"] == "a bare string"
+
+
+def test_messages_to_dict_langchain_with_converter(monkeypatch):
+    monkeypatch.setattr(llm_utils, "LangchainBaseMessage", FakeLangchainMessage)
+    monkeypatch.setattr(
+        llm_utils,
+        "convert_message_to_dict",
+        lambda m: {"role": "converted", "content": m.content},
+    )
+    messages = llm_utils.messages_to_dict([FakeLangchainMessage("human", "hello")])
+    assert messages.messages[0]["role"] == "converted"
+    assert messages.messages[0]["content"] == "hello"
+
+
+@pytest.mark.parametrize(
+    "lc_type,expected_role",
+    [("human", "user"), ("ai", "assistant"), ("system", "system"), ("tool", "tool")],
+)
+def test_messages_to_dict_langchain_role_map_fallback(monkeypatch, lc_type, expected_role):
+    monkeypatch.setattr(llm_utils, "LangchainBaseMessage", FakeLangchainMessage)
+    monkeypatch.setattr(llm_utils, "convert_message_to_dict", None)
+    messages = llm_utils.messages_to_dict([FakeLangchainMessage(lc_type, "hello")])
+    assert messages.messages[0]["role"] == expected_role
+    assert messages.messages[0]["content"] == "hello"
+
+
+def test_messages_to_dict_unknown_type_raises():
+    with pytest.raises(ValueError, match="Unknown message type"):
+        llm_utils.messages_to_dict([object()])
+
+
 if __name__ == "__main__":
     # test_retry_parallel()
     # test_rate_limit_max_wait_time()
