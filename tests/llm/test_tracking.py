@@ -54,6 +54,47 @@ def test_get_pricing_openai():
     assert all(isinstance(pricing[model]["completion"], float) for model in pricing)
 
 
+@pytest.mark.parametrize(
+    "raw_name,expected",
+    [
+        ("anthropic.claude-v2", "claude"),
+        ("anthropic.claude-v2:1", "claude"),
+        ("anthropic.claude-3-sonnet-20240229-v1:0", "claude-3-sonnet-20240229"),
+        ("anthropic.claude-instant-v1", "claude-instant"),
+        ("anthropic.claude-3-5-sonnet-20240620-v1:0", "claude-3-5-sonnet-20240620"),
+        ("claude-3-opus-20240229", "claude-3-opus-20240229"),
+    ],
+)
+def test_remove_version_suffix(raw_name, expected):
+    assert tracking._remove_version_suffix(raw_name) == expected
+
+
+class _FakeBedrockCallback:
+    MODEL_COST_PER_1K_INPUT_TOKENS = {
+        "anthropic.claude-3-sonnet-20240229-v1:0": 3.0,
+        "anthropic.claude-instant-v1": 0.8,
+    }
+    MODEL_COST_PER_1K_OUTPUT_TOKENS = {
+        "anthropic.claude-3-sonnet-20240229-v1:0": 15.0,
+        "anthropic.claude-3-haiku-20240307-v1:0": 1.25,
+    }
+
+
+def test_get_pricing_anthropic(monkeypatch):
+    monkeypatch.setattr(tracking, "bedrock_anthropic_callback", _FakeBedrockCallback)
+    pricing = tracking.get_pricing_anthropic()
+    assert pricing == {
+        "claude-3-sonnet-20240229": {"prompt": 0.003, "completion": 0.015},
+        "claude-instant": {"prompt": 0.0008},
+        "claude-3-haiku-20240307": {"completion": 0.00125},
+    }
+
+
+def test_get_pricing_anthropic_without_langchain_community(monkeypatch):
+    monkeypatch.setattr(tracking, "bedrock_anthropic_callback", None)
+    assert tracking.get_pricing_anthropic() == {}
+
+
 def call_llm():
     if hasattr(tracking.TRACKER, "instance") and isinstance(
         tracking.TRACKER.instance, tracking.LLMTracker
