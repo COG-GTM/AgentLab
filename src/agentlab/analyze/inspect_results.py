@@ -560,7 +560,9 @@ def map_err_key(err_msg: str):
         return err_msg
 
     # remove logs from the message if any
-    err_msg = err_msg[: err_msg.find("=== logs ===")].rstrip()
+    logs_idx = err_msg.find("=== logs ===")
+    if logs_idx >= 0:
+        err_msg = err_msg[:logs_idx].rstrip()
     regex_replacements = [
         (
             r"your messages resulted in \d+ tokens",
