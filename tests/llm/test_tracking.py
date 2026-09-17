@@ -1,6 +1,8 @@
+import logging
 import os
 import time
 from functools import partial
+from types import SimpleNamespace
 
 import pytest
 
@@ -44,6 +46,36 @@ def test_get_pricing_openrouter():
         assert model in pricing
         assert isinstance(pricing[model], dict)
         assert all(isinstance(v, float) for v in pricing[model].values())
+
+
+@pytest.mark.parametrize(
+    "response,expected",
+    [
+        (SimpleNamespace(usage=SimpleNamespace(input_tokens=11, output_tokens=7)), (11, 7)),
+        (SimpleNamespace(usage=SimpleNamespace(prompt_tokens=13, completion_tokens=5)), (13, 5)),
+        ({"usage": {"input_tokens": 3, "output_tokens": 4}}, (3, 4)),
+        ({"usage": {"prompt_tokens": 8, "completion_tokens": 2}}, (8, 2)),
+    ],
+)
+def test_get_tokens_counts_from_response(response, expected):
+    mixin = tracking.TrackAPIPricingMixin()
+    assert mixin.get_tokens_counts_from_response(response) == expected
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        SimpleNamespace(),
+        SimpleNamespace(usage=SimpleNamespace(total_tokens=10)),
+        {"usage": {"total_tokens": 10}},
+        {},
+    ],
+)
+def test_get_tokens_counts_from_response_defaults_to_zero(response, caplog):
+    mixin = tracking.TrackAPIPricingMixin()
+    with caplog.at_level(logging.WARNING):
+        assert mixin.get_tokens_counts_from_response(response) == (0, 0)
+    assert "Unable to extract input and output tokens" in caplog.text
 
 
 def test_get_pricing_openai():
