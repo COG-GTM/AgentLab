@@ -244,6 +244,52 @@ An inline code block ```click()```
     assert llm_utils.extract_code_blocks(text) == expected_output
 
 
+def test_parse_html_tags_extracts_required_and_optional():
+    text = "<think>reasoning</think>\n<action>click('42')</action>\n<memory>note</memory>"
+    content_dict, valid, retry_message = llm_utils.parse_html_tags(
+        text, keys=("think", "action"), optional_keys=("memory",)
+    )
+    assert valid is True
+    assert retry_message == ""
+    assert content_dict == {"think": "reasoning", "action": "click('42')", "memory": "note"}
+
+
+def test_parse_html_tags_missing_required_key():
+    text = "<think>reasoning</think>"
+    content_dict, valid, retry_message = llm_utils.parse_html_tags(text, keys=("think", "action"))
+    assert valid is False
+    assert "<action>" in retry_message
+    assert "action" not in content_dict
+
+    with pytest.raises(llm_utils.ParseError):
+        llm_utils.parse_html_tags_raise(text, keys=("think", "action"))
+
+
+def test_parse_html_tags_missing_optional_key():
+    text = "<think>reasoning</think>\n<action>click('42')</action>"
+    content_dict = llm_utils.parse_html_tags_raise(
+        text, keys=("think", "action"), optional_keys=("memory",)
+    )
+    assert content_dict == {"think": "reasoning", "action": "click('42')"}
+
+
+def test_parse_html_tags_repeated_key_without_merge():
+    text = "<action>click('42')</action>\n<action>click('43')</action>"
+    content_dict, valid, retry_message = llm_utils.parse_html_tags(text, keys=("action",))
+    assert valid is False
+    assert "multiple instances" in retry_message
+    assert content_dict["action"] == "click('42')"
+
+    with pytest.raises(llm_utils.ParseError):
+        llm_utils.parse_html_tags_raise(text, keys=("action",))
+
+
+def test_parse_html_tags_repeated_key_with_merge():
+    text = "<action>click('42')</action>\n<action>click('43')</action>"
+    content_dict = llm_utils.parse_html_tags_raise(text, keys=("action",), merge_multiple=True)
+    assert content_dict["action"] == "click('42')\nclick('43')"
+
+
 def test_message_merge_only_text():
     content = [
         {"type": "text", "text": "Hello, world!"},
