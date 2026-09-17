@@ -12,6 +12,7 @@ from agentlab.llm.response_api import (
     APIPayload,
     ClaudeResponseModelArgs,
     LLMOutput,
+    MessageBuilder,
     OpenAIChatCompletionAPIMessageBuilder,
     OpenAIChatModelArgs,
     OpenAIResponseAPIMessageBuilder,
@@ -355,6 +356,111 @@ def test_claude_response_model_parse_and_cost():
     assert fn_call.name == "search_web"
     assert global_tracker.stats["input_tokens"] == 40
     assert global_tracker.stats["output_tokens"] == 20
+
+
+def call_claude_with_payload(payload: APIPayload) -> Dict[str, Any]:
+    """Run a mocked Claude call and return the api_params sent to the Anthropic client."""
+    model = ClaudeResponseModelArgs(model_name="claude-3-haiku-20240307").make_model()
+    mock_response = create_mock_anthropic_response(text_content="ok")
+
+    with patch.object(model.client.messages, "create", return_value=mock_response) as mock_create:
+        with tracking.set_tracker():
+            model(payload)
+
+    mock_create.assert_called_once()
+    return mock_create.call_args.kwargs
+
+
+def test_claude_no_cache_control_by_default():
+    messages = [AnthropicAPIMessageBuilder.user().add_text("hello")]
+    tools = [{"name": "search_web", "input_schema": {}}]
+
+    api_params = call_claude_with_payload(APIPayload(messages=messages, tools=tools))
+
+    assert "cache_control" not in api_params["tools"][-1]
+    assert "cache_control" not in api_params["messages"][-1]["content"][-1]
+
+
+def test_claude_cache_tool_definition_marks_last_tool():
+    messages = [AnthropicAPIMessageBuilder.user().add_text("hello")]
+    tools = [{"name": "search_web", "input_schema": {}}, {"name": "click", "input_schema": {}}]
+
+    api_params = call_claude_with_payload(
+        APIPayload(messages=messages, tools=tools, cache_tool_definition=True)
+    )
+
+    assert api_params["tools"][-1]["cache_control"] == {"type": "ephemeral"}
+    assert "cache_control" not in api_params["tools"][0]
+
+
+def test_claude_cache_complete_prompt_marks_last_content_block():
+    messages = [
+        AnthropicAPIMessageBuilder.user().add_text("first"),
+        AnthropicAPIMessageBuilder.user().add_text("second").add_text("third"),
+    ]
+
+    api_params = call_claude_with_payload(APIPayload(messages=messages, cache_complete_prompt=True))
+
+    last_content = api_params["messages"][-1]["content"]
+    assert last_content[-1]["text"] == "third"
+    assert last_content[-1]["cache_control"] == {"type": "ephemeral"}
+    assert "cache_control" not in last_content[0]
+    assert "cache_control" not in api_params["messages"][0]["content"][-1]
+
+
+def test_claude_use_cache_breakpoints_only_marks_flagged_messages():
+    marked = AnthropicAPIMessageBuilder.user().add_text("cache me")
+    marked.mark_all_previous_msg_for_caching()
+    messages = [
+        AnthropicAPIMessageBuilder.user().add_text("not cached"),
+        marked,
+        AnthropicAPIMessageBuilder.user().add_text("after breakpoint"),
+    ]
+
+    api_params = call_claude_with_payload(APIPayload(messages=messages, use_cache_breakpoints=True))
+
+    contents = [msg["content"][-1] for msg in api_params["messages"]]
+    assert "cache_control" not in contents[0]
+    assert contents[1]["cache_control"] == {"type": "ephemeral"}
+    assert "cache_control" not in contents[2]
+
+
+def test_claude_cache_breakpoint_on_empty_content_raises():
+    """An empty message has no content block to carry the cache_control marker."""
+    marked = AnthropicAPIMessageBuilder.user()
+    marked.mark_all_previous_msg_for_caching()
+
+    with pytest.raises(IndexError):
+        call_claude_with_payload(APIPayload(messages=[marked], use_cache_breakpoints=True))
+
+
+def test_anthropic_builder_mark_all_previous_msg_for_caching_sets_breakpoint():
+    msg = AnthropicAPIMessageBuilder.user().add_text("hello")
+
+    assert getattr(msg, "_cache_breakpoint", False) is False
+    msg.mark_all_previous_msg_for_caching()
+    assert msg._cache_breakpoint is True
+
+
+@pytest.mark.parametrize(
+    "builder_cls", [OpenAIResponseAPIMessageBuilder, OpenAIChatCompletionAPIMessageBuilder]
+)
+def test_openai_builders_mark_all_previous_msg_for_caching_is_noop(builder_cls):
+    msg = builder_cls.user().add_text("hello")
+
+    assert msg.mark_all_previous_msg_for_caching() is None
+    assert getattr(msg, "_cache_breakpoint", False) is False
+
+
+def test_base_builder_mark_all_previous_msg_for_caching_not_implemented():
+    class BareMessageBuilder(MessageBuilder):
+        def prepare_message(self):
+            return [{"role": self.role, "content": self.content}]
+
+    msg = BareMessageBuilder.user().add_text("hello")
+
+    with pytest.raises(NotImplementedError):
+        msg.mark_all_previous_msg_for_caching()
 
 
 def test_openai_response_model_parse_and_cost():
