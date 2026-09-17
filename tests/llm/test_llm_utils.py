@@ -32,6 +32,20 @@ def test_truncate_tokens():
     assert truncated == "This is a"
 
 
+def test_truncate_tokens_with_start():
+    text = "This is a simple test."
+    assert llm_utils.truncate_tokens(text, max_tokens=3, start=2) == " a simple test"
+    assert llm_utils.truncate_tokens(text, max_tokens=2, start=1) == " is a"
+
+
+def test_truncate_tokens_within_limit_returns_text_unchanged():
+    text = "This is a simple test."
+    assert llm_utils.truncate_tokens(text, max_tokens=6) == text
+    assert llm_utils.truncate_tokens(text, max_tokens=100) == text
+    # start only shrinks the window: the remaining tokens fit, so the whole text is returned
+    assert llm_utils.truncate_tokens(text, max_tokens=4, start=2) == text
+
+
 def test_count_tokens():
     text = "This is a simple test."
     assert llm_utils.count_tokens(text) == 6
