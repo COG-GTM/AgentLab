@@ -1,10 +1,14 @@
+import base64
+import io
 import warnings
 from typing import Literal
 from unittest.mock import Mock
 
 import httpx
+import numpy as np
 import pytest
 from openai import RateLimitError
+from PIL import Image
 
 from agentlab.llm import llm_utils
 from agentlab.llm.chat_api import make_system_message
@@ -268,6 +272,63 @@ def test_message_merge_text_image():
     assert message["content"][0]["text"] == "Hello, world!\nThis is a test."
     assert message["content"][1]["image_url"] == "this is a base64 image"
     assert message["content"][2]["text"] == "This is another test.\nGoodbye, world!"
+
+
+def test_message_add_text_promotes_string_content():
+    message = llm_utils.BaseMessage(role="user", content="Hello, world!")
+    message.add_text("This is a test.")
+    assert message["content"] == [
+        {"type": "text", "text": "Hello, world!"},
+        {"type": "text", "text": "This is a test."},
+    ]
+
+
+def test_message_add_content_appends_to_list_content():
+    message = llm_utils.BaseMessage(role="user", content=[{"type": "text", "text": "Hello"}])
+    message.add_content("image_url", {"url": "an url"})
+    assert message["content"] == [
+        {"type": "text", "text": "Hello"},
+        {"type": "image_url", "image_url": {"url": "an url"}},
+    ]
+
+
+def test_message_add_image_string_is_passed_through():
+    message = llm_utils.BaseMessage(role="user", content="Hello")
+    message.add_image("https://example.com/image.png", detail="high")
+    assert message["content"][1] == {
+        "type": "image_url",
+        "image_url": {"url": "https://example.com/image.png", "detail": "high"},
+    }
+
+
+@pytest.mark.parametrize("as_array", [False, True])
+def test_message_add_image_encodes_base64_jpeg(as_array: bool):
+    image = Image.new("RGB", (4, 2), color=(255, 0, 0))
+    if as_array:
+        image = np.array(image)
+
+    message = llm_utils.BaseMessage(role="user", content="Hello")
+    message.add_image(image)
+
+    elem = message["content"][1]
+    assert elem["type"] == "image_url"
+    assert set(elem["image_url"].keys()) == {"url"}
+    prefix = "data:image/jpeg;base64,"
+    assert elem["image_url"]["url"].startswith(prefix)
+    decoded = base64.b64decode(elem["image_url"]["url"][len(prefix) :], validate=True)
+    assert Image.open(io.BytesIO(decoded)).size == (4, 2)
+
+
+def test_discussion_add_image_delegates_to_last_message():
+    discussion = llm_utils.Discussion([llm_utils.SystemMessage("system prompt")])
+    discussion.add_message(llm_utils.HumanMessage("user prompt"))
+    discussion.add_image("an url")
+
+    assert discussion.messages[0]["content"] == "system prompt"
+    assert discussion.last_message["content"] == [
+        {"type": "text", "text": "user prompt"},
+        {"type": "image_url", "image_url": {"url": "an url"}},
+    ]
 
 
 if __name__ == "__main__":
