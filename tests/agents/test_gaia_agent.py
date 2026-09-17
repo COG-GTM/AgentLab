@@ -1,11 +1,19 @@
 import os
 import uuid
 from pathlib import Path
+from typing import Iterator, Literal
 
 try:
+    from tapeagents.core import Action, Thought
     from tapeagents.steps import ImageObservation
 
-    from agentlab.agents.tapeagent.agent import TapeAgent, TapeAgentArgs, load_config
+    from agentlab.agents.tapeagent.agent import (
+        DictObservation,
+        TapeAgent,
+        TapeAgentArgs,
+        TapeAgentInfo,
+        load_config,
+    )
     from agentlab.benchmarks.gaia import GaiaBenchmark, GaiaQuestion
 except ModuleNotFoundError:
     import pytest
@@ -47,6 +55,71 @@ def mock_dataset() -> dict:
         },
     }
     return {"validation": data}
+
+
+class MockThought(Thought):
+    kind: Literal["mock_thought"] = "mock_thought"  # type: ignore
+    text: str = ""
+
+
+class MockAction(Action):
+    kind: Literal["mock_action"] = "mock_action"  # type: ignore
+    text: str = ""
+
+
+class MockEvent:
+    def __init__(self, step=None):
+        self.step = step
+
+
+class MockTapeAgent:
+    """Stands in for a tapeagents Agent: replays a fixed list of steps as events."""
+
+    name = "mock_agent"
+
+    def __init__(self, steps: list):
+        self.steps = steps
+        self.tapes_seen = []
+
+    def run(self, tape) -> Iterator[MockEvent]:
+        self.tapes_seen.append(tape)
+        yield MockEvent()  # events without a step are skipped by the agent
+        for step in self.steps:
+            yield MockEvent(step)
+
+
+def test_get_action():
+    thought = MockThought(text="I should answer")
+    action = MockAction(text="answer")
+    inner_agent = MockTapeAgent([thought, action])
+    agent = TapeAgent(agent=inner_agent)
+
+    obs = DictObservation(content="what is the answer?")
+    returned_action, agent_info = agent.get_action(agent.obs_preprocessor(obs))
+
+    assert returned_action is action
+    assert isinstance(agent_info, TapeAgentInfo)
+    assert agent_info.thoughts == [thought]
+    assert len(inner_agent.tapes_seen) == 1
+    assert [type(step) for step in agent.tape] == [DictObservation, MockThought, MockAction]
+
+
+def test_get_action_keeps_first_action_and_accumulates_tape():
+    first_action = MockAction(text="first")
+    inner_agent = MockTapeAgent([first_action, MockAction(text="second")])
+    agent = TapeAgent(agent=inner_agent)
+
+    returned_action, agent_info = agent.get_action([DictObservation(content="step one")])
+    assert returned_action is first_action
+    assert agent_info.thoughts == []
+
+    inner_agent.steps = [MockThought(text="again"), MockAction(text="third")]
+    returned_action, agent_info = agent.get_action([DictObservation(content="step two")])
+    assert returned_action.text == "third"
+    assert len(agent_info.thoughts) == 1
+    # both actions of the first run land on the tape, only the first one is returned
+    assert len(agent.tape) == 6
+    assert agent.final_tape.metadata.truncated is True
 
 
 def test_agent_creation():
