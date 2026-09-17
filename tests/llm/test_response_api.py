@@ -1,3 +1,5 @@
+import base64
+import io
 import os
 from typing import Any, Dict, List, Optional
 from unittest.mock import MagicMock, patch
@@ -5,11 +7,13 @@ from unittest.mock import MagicMock, patch
 import anthropic
 import openai
 import pytest
+from PIL import Image
 
 from agentlab.llm import tracking
 from agentlab.llm.response_api import (
     AnthropicAPIMessageBuilder,
     APIPayload,
+    ClaudeResponseModel,
     ClaudeResponseModelArgs,
     LLMOutput,
     OpenAIChatCompletionAPIMessageBuilder,
@@ -284,6 +288,59 @@ def test_openai_chat_completion_api_message_builder_image():
     assert messages[0]["content"] == [
         {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,CHATCOMPLETIONBASE64"}}
     ]
+
+
+def test_openai_response_api_message_builder_assistant_text_is_output_text():
+    builder = OpenAIResponseAPIMessageBuilder.assistant()
+    builder.add_text("Assistant reply")
+    messages = builder.prepare_message()
+    assert messages[0]["role"] == "assistant"
+    assert messages[0]["content"] == [{"type": "output_text", "text": "Assistant reply"}]
+
+
+@pytest.mark.parametrize(
+    "builder_cls",
+    [
+        OpenAIResponseAPIMessageBuilder,
+        AnthropicAPIMessageBuilder,
+        OpenAIChatCompletionAPIMessageBuilder,
+    ],
+)
+def test_message_builder_rejects_unsupported_content(builder_cls):
+    builder = builder_cls.user()
+    builder.content.append({"audio": "data:audio/wav;base64,NOTSUPPORTED"})
+    with pytest.raises(ValueError, match="Unsupported content type"):
+        builder.prepare_message()
+
+
+def test_add_image_url_appends_png_base64_content():
+    builder = OpenAIResponseAPIMessageBuilder.user()
+    builder.add_image_url(Image.new("RGB", (2, 2), color="red"))
+
+    assert len(builder.content) == 1
+    image_url = builder.content[0]["image"]
+    assert image_url.startswith("data:image/png;base64,")
+    image = Image.open(io.BytesIO(base64.b64decode(image_url.split(",", 1)[1])))
+    assert image.size == (2, 2)
+
+
+def test_filter_system_messages_splits_system_and_other_messages():
+    sys_msg = AnthropicAPIMessageBuilder.system().add_text("You are a helpful agent.")
+    user_msg = AnthropicAPIMessageBuilder.user().add_text("Hello!")
+    raw_msg = {"role": "user", "content": "raw dict message"}
+
+    sys_msgs, other_msgs = ClaudeResponseModel.filter_system_messages([sys_msg, user_msg, raw_msg])
+
+    assert sys_msgs == [sys_msg]
+    assert other_msgs == [user_msg, raw_msg]
+
+
+def test_filter_system_messages_rejects_image_in_system_message():
+    sys_msg = AnthropicAPIMessageBuilder.system().add_text("You are a helpful agent.")
+    sys_msg.content.append({"type": "image", "image": "data:image/png;base64,SYSTEMIMAGE"})
+
+    with pytest.raises(TypeError, match="System messages cannot contain images."):
+        ClaudeResponseModel.filter_system_messages([sys_msg])
 
 
 def test_openai_chat_completion_model_parse_and_cost():
