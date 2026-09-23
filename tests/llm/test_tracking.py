@@ -46,6 +46,38 @@ def test_get_pricing_openrouter():
         assert all(isinstance(v, float) for v in pricing[model].values())
 
 
+@pytest.mark.parametrize(
+    "payload,expected",
+    [
+        (
+            {"data": [{"id": "a", "pricing": {"prompt": "1.0", "completion": "2.0"}}]},
+            {"a": {"prompt": 1.0, "completion": 2.0}},
+        ),
+        (
+            {"data": [{"id": "a", "pricing": {"prompt": None, "completion": "2.0"}}]},
+            {"a": {"completion": 2.0}},
+        ),
+        ({"data": [{"id": "a"}, {"pricing": {}}, "not-a-dict"]}, {}),
+        ({"models": []}, {}),
+        ([], {}),
+    ],
+)
+def test_get_pricing_openrouter_malformed_payload(monkeypatch, payload, expected):
+    class FakeResponse:
+        status_code = 200
+
+        def json(self):
+            return payload
+
+    monkeypatch.setenv("OPENROUTER_API_KEY", "fake-key")
+    monkeypatch.setattr(tracking.requests, "get", lambda *args, **kwargs: FakeResponse())
+    tracking.get_pricing_openrouter.cache_clear()
+    try:
+        assert tracking.get_pricing_openrouter() == expected
+    finally:
+        tracking.get_pricing_openrouter.cache_clear()
+
+
 def test_get_pricing_openai():
     pricing = tracking.get_pricing_openai()
     assert isinstance(pricing, dict)
