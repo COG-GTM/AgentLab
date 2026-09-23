@@ -92,6 +92,14 @@ def cost_tracker_decorator(get_action, suffix=""):
     return wrapper
 
 
+def _to_float(value) -> Optional[float]:
+    """Converts a value to float, returning None if it is not numeric."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 @cache
 def get_pricing_openrouter():
     """Returns a dictionary of model pricing for OpenRouter models."""
@@ -105,11 +113,28 @@ def get_pricing_openrouter():
     if response.status_code != 200:
         raise ValueError("Failed to get model metadata")
 
-    model_metadata = response.json()
-    return {
-        model["id"]: {k: float(v) for k, v in model["pricing"].items()}
-        for model in model_metadata["data"]
-    }
+    try:
+        model_metadata = response.json()
+    except Exception as e:
+        logging.warning(f"Failed to parse OpenRouter model metadata: {e}")
+        return {}
+
+    if not isinstance(model_metadata, dict):
+        logging.warning("Unexpected OpenRouter model metadata format")
+        return {}
+
+    pricing = {}
+    for model in model_metadata.get("data") or []:
+        if not isinstance(model, dict):
+            continue
+        model_id = model.get("id")
+        model_pricing = model.get("pricing")
+        if not model_id or not isinstance(model_pricing, dict):
+            continue
+        pricing[model_id] = {
+            k: cost for k, v in model_pricing.items() if (cost := _to_float(v)) is not None
+        }
+    return pricing
 
 
 def get_pricing_openai():
@@ -239,9 +264,13 @@ class TrackAPIPricingMixin:
         """Set the pricing attributes for the model based on the provider."""
         model_to_price_dict = self.fetch_pricing_information_from_provider()
         model_costs = model_to_price_dict.get(self.model_name) if model_to_price_dict else None
-        if model_costs:
-            self.input_cost = float(model_costs["prompt"])
-            self.output_cost = float(model_costs["completion"])
+        if not isinstance(model_costs, dict):
+            model_costs = None
+        input_cost = _to_float(model_costs.get("prompt")) if model_costs else None
+        output_cost = _to_float(model_costs.get("completion")) if model_costs else None
+        if input_cost is not None and output_cost is not None:
+            self.input_cost = input_cost
+            self.output_cost = output_cost
         else:
             # use litellm to get model info if not found in the pricing dict
             try:
