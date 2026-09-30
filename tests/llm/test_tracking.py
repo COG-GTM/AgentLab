@@ -267,6 +267,17 @@ def test_anthropic_effective_cost_without_cache_fields():
     assert mixin.get_effective_cost(response) == pytest.approx(100 * 2e-6 + 50 * 1e-5)
 
 
+def test_anthropic_effective_cost_with_null_cache_fields():
+    mixin = make_pricing_mixin("anthropic")
+    usage = AnthropicUsage(input_tokens=100, output_tokens=50)
+    assert usage.cache_read_input_tokens is None
+    assert usage.cache_creation_input_tokens is None
+
+    assert mixin.get_effective_cost(SimpleNamespace(usage=usage)) == pytest.approx(
+        100 * 2e-6 + 50 * 1e-5
+    )
+
+
 def test_openai_chat_completion_effective_cost_with_cached_tokens():
     mixin = make_pricing_mixin("openai")
     response = SimpleNamespace(

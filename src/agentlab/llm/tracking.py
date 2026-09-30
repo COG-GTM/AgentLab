@@ -320,8 +320,8 @@ class TrackAPIPricingMixin:
         usage = getattr(response, "usage", {})
         new_input_tokens = getattr(usage, "input_tokens", 0)  # new input tokens
         output_tokens = getattr(usage, "output_tokens", 0)
-        cache_read_tokens = getattr(usage, "cache_read_input_tokens", 0)
-        cache_write_tokens = getattr(usage, "cache_creation_input_tokens", 0)
+        cache_read_tokens = getattr(usage, "cache_read_input_tokens", 0) or 0
+        cache_write_tokens = getattr(usage, "cache_creation_input_tokens", 0) or 0
 
         cache_read_cost = self.input_cost * ANTHROPIC_CACHE_PRICING_FACTOR["cache_read_tokens"]
         cache_write_cost = self.input_cost * ANTHROPIC_CACHE_PRICING_FACTOR["cache_write_tokens"]
