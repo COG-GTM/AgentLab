@@ -16,6 +16,8 @@ from agentlab.llm.response_api import (
     OpenAIChatModelArgs,
     OpenAIResponseAPIMessageBuilder,
     OpenAIResponseModelArgs,
+    ToolCall,
+    ToolCalls,
 )
 
 
@@ -399,6 +401,333 @@ def test_openai_response_model_parse_and_cost():
     assert parsed_output.raw_response == mock_api_resp
     assert global_tracker.stats["input_tokens"] == 70
     assert global_tracker.stats["output_tokens"] == 40
+
+
+# --- Test multi-turn tool-call formatting (mocked, non-pricy) ---
+
+
+def _make_openai_responses_computer_call_tool_calls(call_id="cu_call_1"):
+    computer_call = MagicMock()
+    computer_call.type = "computer_call"
+    computer_call.call_id = call_id
+    raw_response = create_mock_openai_responses_api_response()
+    raw_response.output.append(computer_call)
+    tool_call = ToolCall(name="click", arguments={"x": 1, "y": 2}, raw_call=computer_call)
+    return ToolCalls(tool_calls=[tool_call], raw_calls=raw_response)
+
+
+def test_openai_response_model_multi_turn_tool_call_formatting():
+    args = OpenAIResponseModelArgs(model_name="gpt-4.1")
+    first_response = create_mock_openai_responses_api_response(
+        outputs=[
+            {"type": "reasoning", "summary": ["Need the weather tool."]},
+            {
+                "type": "function_call",
+                "name": "get_weather",
+                "arguments": '{"location": "Paris"}',
+                "call_id": "call_paris",
+            },
+        ]
+    )
+    second_response = create_mock_openai_responses_api_response(
+        outputs=[
+            {
+                "type": "function_call",
+                "name": "get_weather",
+                "arguments": '{"location": "Delhi"}',
+                "call_id": "call_delhi",
+            }
+        ]
+    )
+
+    with patch("agentlab.llm.response_api.OpenAI") as mock_openai_class:
+        mock_openai_class.return_value = MagicMock()
+        model = args.make_model()
+    builder = args.get_message_builder()
+    assert builder is OpenAIResponseAPIMessageBuilder
+
+    messages = [builder.user().add_text("What is the weather in Paris?")]
+    with patch.object(
+        model.client.responses, "create", side_effect=[first_response, second_response]
+    ) as mock_create:
+        first_output = model(APIPayload(messages=messages, tools=responses_api_tools))
+        assert len(first_output.tool_calls) == 1
+        for tool_call in first_output.tool_calls:
+            tool_call.response_text("It's sunny! 25°C")
+        messages += [
+            builder.add_responded_tool_calls(first_output.tool_calls),
+            builder.user().add_text("What is the weather in Delhi?"),
+        ]
+        second_output = model(APIPayload(messages=messages, tools=responses_api_tools))
+
+    assert mock_create.call_count == 2
+    sent_input = mock_create.call_args_list[1].kwargs["input"]
+    assert sent_input == [
+        {
+            "role": "user",
+            "content": [{"type": "input_text", "text": "What is the weather in Paris?"}],
+        },
+        first_response.output[0],
+        first_response.output[1],
+        {
+            "type": "function_call_output",
+            "call_id": "call_paris",
+            "output": "It's sunny! 25°C",
+        },
+        {
+            "role": "user",
+            "content": [{"type": "input_text", "text": "What is the weather in Delhi?"}],
+        },
+    ]
+    assert second_output.action == "get_weather(location='Delhi')"
+
+
+def test_openai_response_api_message_builder_computer_call_output():
+    tool_calls = _make_openai_responses_computer_call_tool_calls(call_id="cu_call_1")
+    next(iter(tool_calls)).response_image("data:image/png;base64,SCREENSHOT")
+
+    messages = OpenAIResponseAPIMessageBuilder.add_responded_tool_calls(
+        tool_calls
+    ).prepare_message()
+
+    assert messages == [
+        tool_calls.raw_calls.output[0],
+        {
+            "type": "computer_call_output",
+            "call_id": "cu_call_1",
+            "output": {"type": "input_image", "image_url": "data:image/png;base64,SCREENSHOT"},
+        },
+    ]
+
+
+def test_openai_response_api_message_builder_rejects_image_in_function_call_response():
+    raw_response = create_mock_openai_responses_api_response(
+        outputs=[
+            {
+                "type": "function_call",
+                "name": "get_weather",
+                "arguments": '{"location": "Paris"}',
+                "call_id": "call_paris",
+            }
+        ]
+    )
+    tool_call = ToolCall(
+        name="get_weather", arguments={"location": "Paris"}, raw_call=raw_response.output[0]
+    ).response_image("data:image/png;base64,IMG")
+    tool_calls = ToolCalls(tool_calls=[tool_call], raw_calls=raw_response)
+
+    msg = OpenAIResponseAPIMessageBuilder.add_responded_tool_calls(tool_calls)
+    with pytest.raises(AssertionError, match="Image output is not supported"):
+        msg.prepare_message()
+
+
+def test_openai_response_api_message_builder_rejects_text_in_computer_call_response():
+    tool_calls = _make_openai_responses_computer_call_tool_calls()
+    next(iter(tool_calls)).response_text("not a screenshot")
+
+    msg = OpenAIResponseAPIMessageBuilder.add_responded_tool_calls(tool_calls)
+    with pytest.raises(AssertionError, match="Text output is not supported"):
+        msg.prepare_message()
+
+
+def test_claude_model_multi_turn_tool_call_formatting():
+    args = ClaudeResponseModelArgs(model_name="claude-3-haiku-20240307")
+    model = args.make_model()
+    builder = args.get_message_builder()
+    assert builder is AnthropicAPIMessageBuilder
+
+    first_response = create_mock_anthropic_response(
+        text_content="Let me check.",
+        tool_use={"id": "toolu_paris", "name": "get_weather", "input": {"location": "Paris"}},
+    )
+    second_tool_use = MagicMock(spec=anthropic.types.ToolUseBlock)
+    second_tool_use.type = "tool_use"
+    second_tool_use.id = "toolu_rome"
+    second_tool_use.name = "get_weather"
+    second_tool_use.input = {"location": "Rome"}
+    first_response.content.append(second_tool_use)
+    second_response = create_mock_anthropic_response(
+        tool_use={"id": "toolu_delhi", "name": "get_weather", "input": {"location": "Delhi"}},
+    )
+
+    messages = [builder.user().add_text("What is the weather in Paris and Rome?")]
+    with patch.object(
+        model.client.messages, "create", side_effect=[first_response, second_response]
+    ) as mock_create:
+        first_output = model(APIPayload(messages=messages, tools=anthropic_tools))
+        assert len(first_output.tool_calls) == 2
+        paris_call, rome_call = first_output.tool_calls
+        paris_call.response_text("Sunny, 25°C")
+        rome_call.response_text("Cloudy, 18°C")
+        messages += [
+            builder.add_responded_tool_calls(first_output.tool_calls),
+            builder.user().add_text("What is the weather in Delhi?"),
+        ]
+        second_output = model(APIPayload(messages=messages, tools=anthropic_tools))
+
+    assert mock_create.call_count == 2
+    sent_messages = mock_create.call_args_list[1].kwargs["messages"]
+    assert sent_messages == [
+        {
+            "role": "user",
+            "content": [{"type": "text", "text": "What is the weather in Paris and Rome?"}],
+        },
+        {"role": "assistant", "content": first_response.content},
+        {
+            "role": "user",
+            "content": [
+                {"type": "tool_result", "tool_use_id": "toolu_paris", "content": "Sunny, 25°C"},
+                {"type": "tool_result", "tool_use_id": "toolu_rome", "content": "Cloudy, 18°C"},
+            ],
+        },
+        {
+            "role": "user",
+            "content": [{"type": "text", "text": "What is the weather in Delhi?"}],
+        },
+    ]
+    assert second_output.action == "get_weather(location='Delhi')"
+
+
+def test_anthropic_api_message_builder_rejects_image_in_tool_response():
+    raw_response = create_mock_anthropic_response(
+        tool_use={"id": "toolu_1", "name": "get_weather", "input": {"location": "Paris"}},
+    )
+    tool_call = ToolCall(
+        name="get_weather", arguments={"location": "Paris"}, raw_call=raw_response.content[0]
+    ).response_image("data:image/png;base64,IMG")
+    tool_calls = ToolCalls(tool_calls=[tool_call], raw_calls=raw_response)
+
+    msg = AnthropicAPIMessageBuilder.add_responded_tool_calls(tool_calls)
+    with pytest.raises(AssertionError, match="Image output is not supported"):
+        msg.prepare_message()
+
+
+def test_openai_chat_completion_model_multi_turn_tool_call_formatting():
+    args = OpenAIChatModelArgs(model_name="gpt-4.1")
+    with patch("agentlab.llm.response_api.OpenAI") as mock_openai_class:
+        mock_openai_class.return_value = MagicMock()
+        model = args.make_model()
+    builder = args.get_message_builder()
+    assert builder is OpenAIChatCompletionAPIMessageBuilder
+
+    first_response = create_mock_openai_chat_completion(
+        tool_calls=[
+            {
+                "id": "call_paris",
+                "type": "function",
+                "function": {"name": "get_weather", "arguments": '{"location": "Paris"}'},
+            },
+            {
+                "id": "call_rome",
+                "type": "function",
+                "function": {"name": "get_weather", "arguments": '{"location": "Rome"}'},
+            },
+        ]
+    )
+    second_response = create_mock_openai_chat_completion(
+        tool_calls=[
+            {
+                "id": "call_delhi",
+                "type": "function",
+                "function": {"name": "get_weather", "arguments": '{"location": "Delhi"}'},
+            }
+        ]
+    )
+
+    messages = [builder.user().add_text("What is the weather in Paris and Rome?")]
+    with patch.object(
+        model.client.chat.completions, "create", side_effect=[first_response, second_response]
+    ) as mock_create:
+        first_output = model(APIPayload(messages=messages, tools=chat_api_tools))
+        assert len(first_output.tool_calls) == 2
+        paris_call, rome_call = first_output.tool_calls
+        paris_call.response_text("Sunny, 25°C")
+        rome_call.response_text("Cloudy, 18°C")
+        messages += [
+            builder.add_responded_tool_calls(first_output.tool_calls),
+            builder.user().add_text("What is the weather in Delhi?"),
+        ]
+        second_output = model(APIPayload(messages=messages, tools=chat_api_tools))
+
+    assert mock_create.call_count == 2
+    sent_messages = mock_create.call_args_list[1].kwargs["messages"]
+    assert sent_messages == [
+        {
+            "role": "user",
+            "content": [{"type": "text", "text": "What is the weather in Paris and Rome?"}],
+        },
+        first_response.choices[0].message,
+        {
+            "name": "get_weather",
+            "role": "tool",
+            "tool_call_id": "call_paris",
+            "content": "Sunny, 25°C",
+        },
+        {
+            "name": "get_weather",
+            "role": "tool",
+            "tool_call_id": "call_rome",
+            "content": "Cloudy, 18°C",
+        },
+        {
+            "role": "user",
+            "content": [{"type": "text", "text": "What is the weather in Delhi?"}],
+        },
+    ]
+    assert second_output.action == "get_weather(location='Delhi')"
+
+
+def test_openai_chat_completion_api_message_builder_rejects_image_in_tool_response():
+    raw_call = {
+        "id": "call_1",
+        "type": "function",
+        "function": {"name": "get_weather", "arguments": '{"location": "Paris"}'},
+    }
+    raw_response = create_mock_openai_chat_completion(tool_calls=[raw_call])
+    tool_call = ToolCall(
+        name="get_weather", arguments={"location": "Paris"}, raw_call=raw_call
+    ).response_image("data:image/png;base64,IMG")
+    tool_calls = ToolCalls(tool_calls=[tool_call], raw_calls=raw_response)
+
+    msg = OpenAIChatCompletionAPIMessageBuilder.add_responded_tool_calls(tool_calls)
+    with pytest.raises(AssertionError, match="Image output is not supported"):
+        msg.prepare_message()
+
+
+TOOL_MESSAGE_BUILDERS = [
+    OpenAIResponseAPIMessageBuilder,
+    AnthropicAPIMessageBuilder,
+    OpenAIChatCompletionAPIMessageBuilder,
+]
+
+
+@pytest.mark.parametrize("builder_cls", TOOL_MESSAGE_BUILDERS)
+def test_add_responded_tool_calls_requires_all_responses(builder_cls):
+    answered = ToolCall(name="get_weather", arguments={"location": "Paris"}).response_text("Sunny")
+    unanswered = ToolCall(name="get_weather", arguments={"location": "Rome"})
+    tool_calls = ToolCalls(tool_calls=[answered, unanswered])
+
+    with pytest.raises(AssertionError, match="All tool calls must have a response"):
+        builder_cls.add_responded_tool_calls(tool_calls)
+
+
+@pytest.mark.parametrize("builder_cls", TOOL_MESSAGE_BUILDERS)
+def test_add_responded_tool_calls_builds_tool_message(builder_cls):
+    tool_call = ToolCall(name="get_weather", arguments={"location": "Paris"}).response_text("Sunny")
+    tool_calls = ToolCalls(tool_calls=[tool_call])
+
+    msg = builder_cls.add_responded_tool_calls(tool_calls)
+
+    assert isinstance(msg, builder_cls)
+    assert msg.role == "tool"
+    assert msg.responded_tool_calls is tool_calls
+    assert msg.content == []
+
+
+@pytest.mark.parametrize("builder_cls", TOOL_MESSAGE_BUILDERS)
+def test_tool_message_without_responded_tool_calls_raises(builder_cls):
+    with pytest.raises(ValueError, match="No tool calls found"):
+        builder_cls("tool").prepare_message()
 
 
 # --- Test Response Models (Pricy - require API keys and actual calls) ---
