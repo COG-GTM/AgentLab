@@ -39,8 +39,7 @@ def exp_result_to_html(
     html_parts = []
 
     # Add CSS for styling (unchanged)
-    html_parts.append(
-        """
+    html_parts.append("""
     <style>
         .episode-container {
             font-family: monospace;
@@ -145,8 +144,7 @@ def exp_result_to_html(
             margin-bottom: 5px;
         }
     </style>
-    """
-    )
+    """)
 
     # Start main container
     html_parts.append('<div class="episode-container">')
@@ -203,47 +201,41 @@ def exp_result_to_html(
         axtree_content = step_info.obs.get("axtree_txt", "")
         if axtree_content:
             axtree_open_attr = "open" if axtree_open else ""
-            html_parts.append(
-                f"""
+            html_parts.append(f"""
             <details class="nested-details" {axtree_open_attr}>
                 <summary>AXTree</summary>
                 <div class="content">
                     <div class="code-block">{_escape_html(axtree_content)}</div>
                 </div>
             </details>
-            """
-            )
+            """)
 
         # HTML (nested collapsible)
         html_content = step_info.obs.get("dom_txt", "")
         if html_content:
             html_open_attr = "open" if html_open else ""
-            html_parts.append(
-                f"""
+            html_parts.append(f"""
             <details class="nested-details" {html_open_attr}>
                 <summary>HTML</summary>
                 <div class="content">
                     <div class="code-block">{_escape_html(html_content)}</div>
                 </div>
             </details>
-            """
-            )
+            """)
 
         # Prompt/Chat messages (nested collapsible) - format like xray
         chat_messages = step_info.agent_info.get("chat_messages", [])
         if chat_messages:
             prompt_open_attr = "open" if prompt_open else ""
             chat_html = _format_chat_messages_like_xray(chat_messages)
-            html_parts.append(
-                f"""
+            html_parts.append(f"""
             <details class="nested-details" {prompt_open_attr}>
                 <summary>Prompt</summary>
                 <div class="content">
                     {chat_html}
                 </div>
             </details>
-            """
-            )
+            """)
 
         # Close step container
         html_parts.append("</div>")  # step-content

@@ -8,7 +8,6 @@ the diff in HTML format.
 from agentlab.agents.generic_agent.reproducibility_agent import reproduce_study
 from agentlab.experiments.exp_utils import RESULTS_DIR
 
-
 if __name__ == "__main__":
 
     # replace by your study name
