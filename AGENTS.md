@@ -92,7 +92,7 @@ uv run pytest -n 5 -m 'not pricy' tests/<area>/
 
 # Coverage for the module under test
 uv run --with pytest-cov pytest tests/path/to/test_file.py \
-  --cov=src/agentlab/<package>  --cov-report=term-missing
+  --cov=src/agentlab/<package> --cov-report=term-missing
 ```
 
 Coverage notes:
