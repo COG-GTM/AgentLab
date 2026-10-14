@@ -917,6 +917,27 @@ class TestGetStudySummary:
         ir.get_study_summary(study_dir, sentinel=sentinel)
         assert sentinel["from_cache"] is False
 
+    @pytest.mark.xfail(
+        strict=True,
+        reason="BUG: stale rebuild reuses cached ExpResult.summary_info, so changed results are ignored",
+    )
+    def test_stale_rebuild_reads_updated_results(self, tmp_path):
+        study_dir = make_study(tmp_path, "s", rewards=(1.0,))
+        summary = ir.get_study_summary(study_dir)
+        assert summary["avg_reward"].tolist() == [1.0]
+
+        summary_file = study_dir / "exp_0" / "summary_info.json"
+        summary_file.write_text(json.dumps(done_summary(reward=0.0)))
+        st = summary_file.stat()
+        os.utime(summary_file, (st.st_atime, st.st_mtime + 100))
+
+        sentinel = {}
+        rebuilt = ir.get_study_summary(study_dir, sentinel=sentinel)
+        assert sentinel["from_cache"] is False
+        assert rebuilt["avg_reward"].tolist() == [0.0]
+        persisted = pd.read_csv(study_dir / "study_summary.csv")
+        assert persisted["avg_reward"].tolist() == [0.0]
+
     def test_ignore_stale_uses_cache_even_after_change(self, tmp_path):
         study_dir = make_study(tmp_path, "s")
         ir.get_study_summary(study_dir)
