@@ -32,6 +32,12 @@ def fresh_tracker(monkeypatch):
     monkeypatch.setattr(chat_api.tracking, "TRACKER", threading.local())
 
 
+@pytest.fixture(autouse=True)
+def fake_api_keys(monkeypatch):
+    for var in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "OPENROUTER_API_KEY"):
+        monkeypatch.setenv(var, "test-key")
+
+
 @pytest.fixture
 def no_sleep(monkeypatch):
     sleeps = []
