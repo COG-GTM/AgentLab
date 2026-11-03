@@ -59,9 +59,7 @@ class MostBasicAgent(bgym.Agent):
     @cost_tracker_decorator
     def get_action(self, obs: Any) -> tuple[str, dict]:
         messages = Discussion(SystemMessage("You are a web assistant."))
-        messages.append(
-            HumanMessage(
-                f"""
+        messages.append(HumanMessage(f"""
 You are helping a user to accomplish the following goal on a website:
 
 {obs["goal"]}
@@ -85,15 +83,11 @@ click('a314')
 
 Please provide a single action at a time and wait for the next observation. Provide only a single action per step. 
 Focus on the bid that are given in the html, and use them to perform the actions.
-"""
-            )
-        )
+"""))
         if self.use_chain_of_thought:
-            messages.add_text(
-                f"""
+            messages.add_text(f"""
 Provide a chain of thoughts reasoning to decompose the task into smaller steps. And execute only the next step.
-"""
-            )
+""")
 
         def parser(response: str) -> tuple[dict, bool, str]:
             blocks = extract_code_blocks(response)
