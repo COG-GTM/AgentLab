@@ -8,6 +8,8 @@ Only classes are accepted, never arbitrary callables (apart from a few reconstru
 helpers used by the standard library and numpy):
 - any class from a trusted package (agentlab, browsergym, bgym, plus the comma-separated
   module roots in the `AGENTLAB_TRUSTED_PICKLE_MODULES` environment variable),
+- subclasses of those classes defined in modules that are already imported (e.g. custom
+  agent args declared in the launching script or a test module); nothing is imported for them,
 - data classes (dataclasses, enums, pydantic models, omegaconf nodes) from dependencies
   whose objects end up in agent configs and LLM traces,
 - plain value types from the standard library and numpy.
@@ -24,6 +26,7 @@ import os
 import pathlib
 import pickle
 import sys
+import typing
 import uuid
 
 import numpy as np
@@ -51,6 +54,7 @@ _SAFE_GLOBALS = {
     uuid.UUID,
     copyreg._reconstructor,
     np.ndarray,
+    typing.Any,
 }  # fmt: skip
 
 _SAFE_FUNCTIONS = {
@@ -65,7 +69,7 @@ _SAFE_FUNCTIONS = {
 
 _SAFE_MODULE_ROOTS = frozenset(
     {"builtins", "copyreg", "_codecs", "collections", "datetime", "decimal", "pathlib"}
-    | {"uuid", "numpy", "PIL"}
+    | {"uuid", "numpy", "PIL", "typing"}
 )
 
 
@@ -114,6 +118,17 @@ def _is_allowed(obj, trusted_roots) -> bool:
         return False
 
 
+def _imported_trusted_subclass(module: str, name: str, trusted_roots) -> type | None:
+    obj = sys.modules.get(module)
+    for attr in name.split("."):
+        obj = getattr(obj, attr, None)
+    if isinstance(obj, type) and any(
+        _root(getattr(base, "__module__", None) or "") in trusted_roots for base in obj.__mro__[1:]
+    ):
+        return obj
+    return None
+
+
 class RestrictedUnpickler(pickle.Unpickler):
     def find_class(self, module, name):
         trusted_roots = _trusted_roots()
@@ -124,6 +139,9 @@ class RestrictedUnpickler(pickle.Unpickler):
             obj = super().find_class(module, name)
             if _is_allowed(obj, trusted_roots):
                 return obj
+        obj = _imported_trusted_subclass(module, name, trusted_roots)
+        if obj is not None:
+            return obj
         raise UnsafePickleError(
             f"Refusing to unpickle global '{module}.{name}' from an untrusted result file. "
             f"If this class belongs to your own agent or benchmark package, add its top-level "

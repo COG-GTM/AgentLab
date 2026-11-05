@@ -2,6 +2,9 @@ import gzip
 import os
 import pickle
 import shutil
+import subprocess
+import typing
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
@@ -183,3 +186,37 @@ def test_trusted_modules_env_var(tmp_path, monkeypatch):
 
 class _Custom:
     pass
+
+
+@dataclass
+class _CustomEnvArgs(EnvArgs):
+    extra: str = "x"
+
+
+class _SpawnProcess:
+    def __init__(self, marker: Path):
+        self.marker = str(marker)
+
+    def __reduce__(self):
+        return (subprocess.Popen, (["touch", self.marker],))
+
+
+def test_imported_subclass_of_trusted_class_is_allowed(tmp_path):
+    path = tmp_path / "data.pkl"
+    value = _CustomEnvArgs(task_name="miniwob.click-test", extra="y")
+    with open(path, "wb") as f:
+        pickle.dump({"args": value, "ref_type": typing.Any}, f)
+
+    with open(path, "rb") as f:
+        assert safe_pickle.load(f) == {"args": value, "ref_type": typing.Any}
+
+
+def test_imported_untrusted_class_is_rejected(tmp_path):
+    marker = tmp_path / "pwned"
+    path = tmp_path / "data.pkl"
+    with open(path, "wb") as f:
+        pickle.dump(_SpawnProcess(marker), f)
+
+    with open(path, "rb") as f, pytest.raises(safe_pickle.UnsafePickleError):
+        safe_pickle.load(f)
+    assert not marker.exists()
