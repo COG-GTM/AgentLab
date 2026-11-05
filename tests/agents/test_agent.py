@@ -3,6 +3,7 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+import pytest
 from openai import OpenAIError
 
 from agentlab.agents.generic_agent.agent_configs import FLAGS_GPT_3_5
@@ -12,6 +13,13 @@ from agentlab.experiments import launch_exp
 from agentlab.experiments.loop import EnvArgs, ExpArgs
 from agentlab.llm.chat_api import BaseModelArgs, CheatMiniWoBLLMArgs
 from agentlab.llm.llm_utils import Discussion
+
+
+@pytest.fixture(autouse=True)
+def _trust_test_model_args(monkeypatch):
+    # The Cheat*Args below live in this test module, so results reloaded by
+    # load_result_df go through safe_pickle and must trust it explicitly.
+    monkeypatch.setenv("AGENTLAB_TRUSTED_PICKLE_MODULES", __name__)
 
 
 def test_generic_agent():
