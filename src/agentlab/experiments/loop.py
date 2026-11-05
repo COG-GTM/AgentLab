@@ -25,6 +25,8 @@ from dataclasses_json import DataClassJsonMixin
 from PIL import Image
 from tqdm import tqdm
 
+from agentlab.experiments import safe_pickle
+
 try:
     from agentlab.agents.tapeagent import TapeAgent, save_tape
 except ImportError:
@@ -34,6 +36,10 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 SEED_MAX = 2 ^ 32  # arbitrary max value (exclusive), seems large enough
+
+# Directory (directly under the study directory) mounted as the agent's code sandbox.
+# Its content is agent-controlled, so result discovery never descends into it.
+CODE_SANDBOX_DIR_NAME = "shared_code"
 
 
 @dataclass
@@ -668,7 +674,7 @@ class ExpResult:
     def exp_args(self) -> ExpArgs:
         if self._exp_args is None:
             with open(self.exp_dir / "exp_args.pkl", "rb") as f:
-                self._exp_args = pickle.load(f)
+                self._exp_args = safe_pickle.load(f)
                 # in case experiments were moved
                 self._exp_args.exp_dir = self.exp_dir
         return self._exp_args
@@ -677,7 +683,7 @@ class ExpResult:
         """Load the step info from the file and return it."""
         if self._steps_info.get(step, None) is None:
             with gzip.open(self.exp_dir / f"step_{step}.pkl.gz", "rb") as f:
-                self._steps_info[step] = pickle.load(f)
+                self._steps_info[step] = safe_pickle.load(f)
             if self._steps_info[step].obs:
                 if "screenshot" not in self._steps_info[step].obs:
                     try:
@@ -699,7 +705,7 @@ class ExpResult:
                     and self._steps_info[step].obs["goal_object"] is None
                 ):
                     with gzip.open(self.exp_dir / "goal_object.pkl.gz", "rb") as f:
-                        goal_object = pickle.load(f)
+                        goal_object = safe_pickle.load(f)
                         self._steps_info[step].obs["goal_object"] = goal_object
 
         return self._steps_info[step]
@@ -867,15 +873,14 @@ def yield_all_exp_results(
     if not isinstance(savedir_base, list):
         savedir_base = [savedir_base]
 
-    exp_args_paths = []
-    for exp_dir in savedir_base:
-        exp_args_paths.extend(list(Path(exp_dir).glob("**/exp_args.pkl")))
+    exp_dirs = []
+    for base_dir in savedir_base:
+        exp_dirs.extend(_find_exp_dirs(base_dir))
 
     if progress_fn is not None:
-        exp_args_paths = progress_fn(exp_args_paths, desc="Searching experiments directories.")
+        exp_dirs = progress_fn(exp_dirs, desc="Searching experiments directories.")
 
-    for exp_args_path in exp_args_paths:
-        exp_dir = exp_args_path.parent
+    for exp_dir in exp_dirs:
         if not load_hidden:
             if exp_dir.name.startswith("_") or exp_dir.name.startswith("."):
                 continue
@@ -883,6 +888,29 @@ def yield_all_exp_results(
             yield get_exp_result(exp_dir)
         else:
             yield ExpResult(exp_dir)
+
+
+def _find_exp_dirs(base_dir: str | Path) -> list[Path]:
+    """Find experiment directories (those containing an `exp_args.pkl`) under base_dir.
+
+    Symlinks are not followed, the code sandbox directory is skipped and experiment
+    directories are not searched further: they may contain agent-written files (e.g. the
+    `code` symlink to the sandbox), and AgentLab never nests experiments inside one another.
+
+    Args:
+        base_dir: Root directory to search.
+
+    Returns:
+        list[Path]: The experiment directories found under base_dir.
+    """
+    exp_dirs = []
+    for dirpath, dirnames, filenames in os.walk(base_dir, followlinks=False):
+        if "exp_args.pkl" in filenames:
+            exp_dirs.append(Path(dirpath))
+            dirnames.clear()
+        else:
+            dirnames[:] = sorted(d for d in dirnames if d != CODE_SANDBOX_DIR_NAME)
+    return exp_dirs
 
 
 class DataclassJSONEncoder(json.JSONEncoder):
