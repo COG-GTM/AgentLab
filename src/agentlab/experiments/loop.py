@@ -25,6 +25,8 @@ from dataclasses_json import DataClassJsonMixin
 from PIL import Image
 from tqdm import tqdm
 
+from agentlab.experiments import safe_pickle
+
 try:
     from agentlab.agents.tapeagent import TapeAgent, save_tape
 except ImportError:
@@ -668,7 +670,7 @@ class ExpResult:
     def exp_args(self) -> ExpArgs:
         if self._exp_args is None:
             with open(self.exp_dir / "exp_args.pkl", "rb") as f:
-                self._exp_args = pickle.load(f)
+                self._exp_args = safe_pickle.load(f)
                 # in case experiments were moved
                 self._exp_args.exp_dir = self.exp_dir
         return self._exp_args

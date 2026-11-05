@@ -19,6 +19,7 @@ from agentlab.agents.agent_args import AgentArgs
 from agentlab.analyze import inspect_results
 from agentlab.benchmarks.abstract_env import AbstractEnvArgs
 from agentlab.experiments import reproducibility_util as repro
+from agentlab.experiments import safe_pickle
 from agentlab.experiments.exp_utils import RESULTS_DIR, add_dependencies
 from agentlab.experiments.launch_exp import (
     find_incomplete,
@@ -414,6 +415,7 @@ class Study(AbstractStudy):
 
     @staticmethod
     def load(dir: Path) -> "Study":
+        """Load a study from `dir` using a restricted unpickler (see `safe_pickle`)."""
         dir = Path(dir)
         study_path = dir / "study.pkl.gz"
         if not study_path.exists() and dir.is_dir():
@@ -425,8 +427,8 @@ class Study(AbstractStudy):
             agent_args = first_result.exp_args.agent_args
             study = Study(agent_args=agent_args, benchmark=benchmark_name, dir=dir)
         else:
-            with gzip.open(dir / "study.pkl.gz", "rb") as f:
-                study = pickle.load(f)  # type: Study
+            with gzip.open(study_path, "rb") as f:
+                study = safe_pickle.load(f)  # type: Study
             study.dir = dir
 
             # # just a check

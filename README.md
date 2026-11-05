@@ -143,6 +143,13 @@ study.find_incomplete(include_errors=True)
 study.run()
 ```
 
+`Study.load` (and result loading in general) only unpickles AgentLab/BrowserGym dataclasses, Enums,
+pydantic models and a small allowlist of data types, so a planted `study.pkl.gz` or `exp_args.pkl`
+cannot run code. If your agent args are defined in your own package, add it to the
+`AGENTLAB_TRUSTED_PICKLE_MODULES` environment variable (comma separated, e.g.
+`AGENTLAB_TRUSTED_PICKLE_MODULES=my_agents`). Only do this for study folders from trusted sources:
+step files (`step_*.pkl.gz`) loaded by AgentXray still use plain `pickle`.
+
 See [main.py](main.py) to launch experiments with a variety of options. This is like a lazy CLI that
 is actually more convenient. Just comment and uncomment the lines you need or modify at will (but
 don't push to the repo).

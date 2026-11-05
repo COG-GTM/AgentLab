@@ -155,6 +155,13 @@ class GaiaBenchmark(AbstractBenchmark):
             self.env_args_list.append(env_args)
         logger.info(f"Loaded {len(self.env_args_list)} tasks from {self.split} split")
 
+    def __getstate__(self):
+        # The tasks already live in env_args_list; the Hugging Face dataset is not pickled so that
+        # saved studies stay loadable by agentlab.experiments.safe_pickle.
+        state = super().__getstate__()
+        state["__dict__"] = {**state["__dict__"], "dataset": None}
+        return state
+
 
 class ExtractedFacts(Thought):
     """
