@@ -896,6 +896,12 @@ def _find_exp_dirs(base_dir: str | Path) -> list[Path]:
     Symlinks are not followed, the code sandbox directory is skipped and experiment
     directories are not searched further: they may contain agent-written files (e.g. the
     `code` symlink to the sandbox), and AgentLab never nests experiments inside one another.
+
+    Args:
+        base_dir: Root directory to search.
+
+    Returns:
+        list[Path]: The experiment directories found under base_dir.
     """
     exp_dirs = []
     for dirpath, dirnames, filenames in os.walk(base_dir, followlinks=False):
