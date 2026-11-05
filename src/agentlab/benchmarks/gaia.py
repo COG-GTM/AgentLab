@@ -21,6 +21,7 @@ from tapeagents.tools.simple_browser import SimpleTextBrowser
 
 from agentlab.benchmarks.abstract_env import AbstractBenchmark, AbstractEnvArgs
 from agentlab.benchmarks.multitool_gym import MultiToolGym
+from agentlab.experiments.loop import CODE_SANDBOX_DIR_NAME
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +97,7 @@ class GaiaGymArgs(AbstractEnvArgs):
 def init_code_sandbox(exp_dir: str) -> None:
     # Use a common code directory for all tasks in the experiment, which is mounted in the container
     root_exp_dir = Path(exp_dir).parent
-    code_path = os.path.join(root_exp_dir, "shared_code")
+    code_path = os.path.join(root_exp_dir, CODE_SANDBOX_DIR_NAME)
     os.makedirs(code_path, exist_ok=True)
     os.environ["COMPUTER_CONTAINER_NAME"] = CONTAINER_NAME
 
