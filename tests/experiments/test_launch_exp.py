@@ -63,13 +63,11 @@ def _test_launch_system(backend="ray", cause_timeout=False):
         assert len(results_df) == len(exp_args_list)
 
         for _, row in results_df.iterrows():
-            if row.stack_trace is not None:
-                print(row.stack_trace)
             if cause_timeout:
                 # assert row.err_msg is not None
                 assert math.isnan(row.cum_reward) or row.cum_reward == 0
             else:
-                assert row.err_msg is None
+                assert row.err_msg is None, f"experiment crashed:\n{row.stack_trace}"
                 assert row.cum_reward == 1.0
 
         study_summary = inspect_results.summarize_study(results_df)

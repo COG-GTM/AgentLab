@@ -194,7 +194,7 @@ def test_shrinking_observation():
 def test_main_prompt_elements_gone_one_at_a_time(flag_name: str, expected_prompts):
 
     if flag_name in ["use_thinking", "obs.use_action_history"]:
-        return  # TODO design new tests for those two flags
+        pytest.skip("TODO design new tests for use_thinking and obs.use_action_history")
 
     # Disable the flag
     flags = deepcopy(ALL_TRUE_FLAGS)

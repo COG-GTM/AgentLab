@@ -2,7 +2,7 @@ from agentlab.experiments.multi_server import WebArenaInstanceVars
 from browsergym.webarena.instance import WebArenaInstance
 
 
-def test_webarena_multiserver():
+def test_webarena_multiserver(monkeypatch):
 
     instance_1 = WebArenaInstanceVars(
         base_url="http://webarena1.eastus.cloudapp.azure.com",
@@ -18,6 +18,11 @@ def test_webarena_multiserver():
         prefix="WA_",
     )
 
+    # init() writes WA_* into os.environ. setenv records each original value (even "unset") so
+    # monkeypatch restores it on teardown; delenv(raising=False) on an unset key records nothing.
+    for key in instance_1.make_env_vars():
+        monkeypatch.setenv(key, "")
+
     instance_1.init()
 
     bgym_instance = WebArenaInstance()
@@ -31,7 +36,3 @@ def test_webarena_multiserver():
     bgym_instance = WebArenaInstance()
     base_url_2 = bgym_instance.urls["reddit"].rsplit(":", 1)[0]
     assert base_url_2 == instance_2.base_url
-
-
-if __name__ == "__main__":
-    test_webarena_multiserver()

@@ -788,16 +788,10 @@ EDGE_CASES = [
 ]
 
 
-def test_tool_call_to_python_code():
+@pytest.mark.parametrize(
+    "func_name, kwargs, expected", EDGE_CASES, ids=[case[0] for case in EDGE_CASES]
+)
+def test_tool_call_to_python_code(func_name, kwargs, expected):
     from agentlab.llm.response_api import tool_call_to_python_code
 
-    for edge_case in EDGE_CASES:
-        func_name, kwargs, expected = edge_case
-        result = tool_call_to_python_code(func_name, kwargs)
-        print(result)
-        assert result == expected, f"Expected {expected} but got {result}"
-
-
-if __name__ == "__main__":
-    test_tool_call_to_python_code()
-    # test_openai_chat_completion_model_parse_and_cost()
+    assert tool_call_to_python_code(func_name, kwargs) == expected

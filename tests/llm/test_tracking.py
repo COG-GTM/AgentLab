@@ -1,5 +1,4 @@
 import os
-import time
 from functools import partial
 
 import pytest
@@ -47,8 +46,10 @@ def test_get_pricing_openrouter():
 
 
 def test_get_pricing_openai():
+    pytest.importorskip("langchain_community", reason="OpenAI pricing comes from langchain")
     pricing = tracking.get_pricing_openai()
     assert isinstance(pricing, dict)
+    assert pricing, "expected at least one OpenAI model in the pricing table"
     assert all("prompt" in pricing[model] and "completion" in pricing[model] for model in pricing)
     assert all(isinstance(pricing[model]["prompt"], float) for model in pricing)
     assert all(isinstance(pricing[model]["completion"], float) for model in pricing)
@@ -89,18 +90,22 @@ def test_threaded_trackers():
     """thread_2 occurs in the middle of thread_1, results should be separate."""
     import threading
 
+    t1_tracker_open = threading.Event()
+    t2_done = threading.Event()
+
     def thread_1(results=None):
         with tracking.set_tracker() as tracker:
-            time.sleep(1)
+            t1_tracker_open.set()
+            assert t2_done.wait(timeout=10)
             _, _ = call_llm()
-            time.sleep(1)
         results[0] = tracker.stats
 
     def thread_2(results=None):
-        time.sleep(1)
+        assert t1_tracker_open.wait(timeout=10)
         with tracking.set_tracker() as tracker:
             _, _ = call_llm()
         results[1] = tracker.stats
+        t2_done.set()
 
     results = [None] * 2
     threads = [
@@ -110,9 +115,10 @@ def test_threaded_trackers():
     for thread in threads:
         thread.start()
     for thread in threads:
-        thread.join()
+        thread.join(timeout=10)
 
-    assert all(result["cost"] == 1 for result in results)
+    assert None not in results, "a thread timed out waiting for the other"
+    assert [r["cost"] for r in results] == [1, 1]
 
 
 OPENAI_API_KEY_AVAILABLE = os.environ.get("OPENAI_API_KEY") is not None
