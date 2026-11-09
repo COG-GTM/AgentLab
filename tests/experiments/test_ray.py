@@ -1,7 +1,6 @@
 import bgym
 import pytest
 import ray
-from flaky import flaky
 
 from agentlab.experiments.exp_utils import MockedExpArgs, add_dependencies
 from agentlab.experiments.graph_execution_ray import execute_task_graph
@@ -9,8 +8,16 @@ from agentlab.experiments.graph_execution_ray import execute_task_graph
 TASK_TIME = 3
 
 
-@flaky(max_runs=3, min_passes=1)
-def test_execute_task_graph():
+@pytest.fixture
+def ray_cluster():
+    ray.init(num_cpus=4)
+    try:
+        yield
+    finally:
+        ray.shutdown()
+
+
+def test_execute_task_graph(ray_cluster):
     # Define a list of ExpArgs with dependencies
     exp_args_list = [
         MockedExpArgs(exp_id="task1", depends_on=[]),
@@ -19,29 +26,17 @@ def test_execute_task_graph():
         MockedExpArgs(exp_id="task4", depends_on=["task2", "task3"]),
     ]
 
-    ray.init(num_cpus=4)
     results = execute_task_graph(exp_args_list)
-    ray.shutdown()
 
     exp_args_list = [results[task_id] for task_id in ["task1", "task2", "task3", "task4"]]
 
-    # Verify that all tasks were executed in the proper order
-    assert exp_args_list[0].start_time < exp_args_list[1].start_time
-    assert exp_args_list[0].start_time < exp_args_list[2].start_time
-    assert exp_args_list[1].end_time < exp_args_list[3].start_time
-    assert exp_args_list[2].end_time < exp_args_list[3].start_time
-
-    # Verify that parallel tasks (task2 and task3) started within a short time of each other
-    # TODO: replace with non flaky check
-    # parallel_start_diff = abs(exp_args_list[1].start_time - exp_args_list[2].start_time)
-    # print(f"parallel_start_diff: {parallel_start_diff}")
-    # assert parallel_start_diff < 2, "Parallel tasks should start within 2 seconds of each other"
-
-    # Ensure that the entire task graph took the expected amount of time
-    # TODO: replace with non flaky check
-    # total_time = exp_args_list[-1].end_time - exp_args_list[0].start_time
-    # # Since the critical path involves at least 1.5 seconds of work
-    # assert total_time >= TASK_TIME * 3, "Total time should be at least 3 times the task time"
+    # A dependent task cannot start before its parent returned, so these comparisons are
+    # causal (not timing-based) and hold regardless of machine load.
+    t1, t2, t3, t4 = exp_args_list
+    assert t1.end_time <= t2.start_time, "task2 started before its dependency task1 finished"
+    assert t1.end_time <= t3.start_time, "task3 started before its dependency task1 finished"
+    assert t2.end_time <= t4.start_time, "task4 started before its dependency task2 finished"
+    assert t3.end_time <= t4.start_time, "task4 started before its dependency task3 finished"
 
 
 def test_add_dependencies():
@@ -73,8 +68,3 @@ def test_add_dependencies():
     task_dependencies = {"task1": ["task2"], "task2": [], "task4": ["task3"]}
     with pytest.raises(ValueError):
         add_dependencies(exp_args_list, task_dependencies)
-
-
-if __name__ == "__main__":
-    test_execute_task_graph()
-    # test_add_dependencies()

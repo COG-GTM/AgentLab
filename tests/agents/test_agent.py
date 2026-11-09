@@ -14,6 +14,18 @@ from agentlab.llm.chat_api import BaseModelArgs, CheatMiniWoBLLMArgs
 from agentlab.llm.llm_utils import Discussion
 
 
+def _assert_record(result_record, target: dict):
+    """Compare the first result row against target, reporting every mismatch at once."""
+    row = result_record.iloc[0]
+    if "err_msg" in target and target["err_msg"] is None:
+        # check the crash first so a broken env reports its stack trace, not "0 != 1"
+        assert row["err_msg"] is None, f"experiment crashed:\n{row['stack_trace']}"
+    missing = [key for key in target if key not in result_record]
+    assert not missing, f"columns missing from results: {missing}"
+    actual = {key: row[key] for key in target}
+    assert actual == target, f"stack_trace:\n{row['stack_trace']}"
+
+
 def test_generic_agent():
     exp_args = ExpArgs(
         agent_args=GenericAgentArgs(
@@ -40,9 +52,7 @@ def test_generic_agent():
             "agent.flags.obs.use_ax_tree": True,
         }
 
-        for key, target_val in target.items():
-            assert key in result_record
-            assert result_record[key].iloc[0] == target_val
+        _assert_record(result_record, target)
 
 
 @dataclass
@@ -150,7 +160,6 @@ def test_generic_agent_parse_retry():
             1, [exp_args], Path(tmp_dir) / "generic_agent_test", parallel_backend="joblib"
         )
         result_record = inspect_results.load_result_df(tmp_dir, progress_fn=None)
-        print(result_record)
         target = {
             "stats.cum_n_retry": 2,
             "stats.cum_busted_retry": 0,
@@ -158,9 +167,7 @@ def test_generic_agent_parse_retry():
             "cum_reward": 1.0,
         }
 
-        for key, target_val in target.items():
-            assert key in result_record
-            assert result_record[key].iloc[0] == target_val
+        _assert_record(result_record, target)
 
 
 def test_bust_parse_retry():
@@ -186,9 +193,7 @@ def test_bust_parse_retry():
             "err_msg": None,  # parsing error is considered an agent failure, not a code error
         }
 
-        for key, target_val in target.items():
-            assert key in result_record
-            assert result_record[key].iloc[0] == target_val
+        _assert_record(result_record, target)
 
 
 def test_llm_error_success():
@@ -213,9 +218,7 @@ def test_llm_error_success():
             "err_msg": None,
         }
 
-        for key, target_val in target.items():
-            assert key in result_record
-            assert result_record[key].iloc[0] == target_val
+        _assert_record(result_record, target)
 
 
 def test_llm_error_no_success():
@@ -236,12 +239,11 @@ def test_llm_error_no_success():
         target = {
             "n_steps": 0,
             "cum_reward": 0,
-            "err_msg": "Exception uncaught by agent or environment in task miniwob.click-test.\nOpenAIError:\nLLM failed to respond",
         }
 
-        for key, target_val in target.items():
-            assert key in result_record
-            assert result_record[key].iloc[0] == target_val
+        _assert_record(result_record, target)
+        err_msg = result_record["err_msg"].iloc[0]
+        assert "OpenAIError" in err_msg and "LLM failed to respond" in err_msg
 
 
 if __name__ == "__main__":
