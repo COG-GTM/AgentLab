@@ -103,8 +103,7 @@ class MainPrompt(dp.Shrinkable):
     @property
     def _prompt(self) -> HumanMessage:
         prompt = HumanMessage(self.instructions.prompt)
-        prompt.add_text(
-            f"""\
+        prompt.add_text(f"""\
 {self.obs.prompt}\
 {self.history.prompt}\
 {self.action_prompt.prompt}\
@@ -114,12 +113,10 @@ class MainPrompt(dp.Shrinkable):
 {self.plan.prompt}\
 {self.memory.prompt}\
 {self.criticise.prompt}\
-"""
-        )
+""")
 
         if self.flags.use_abstract_example:
-            prompt.add_text(
-                f"""
+            prompt.add_text(f"""
 # Abstract Example
 
 Here is an abstract version of the answer with description of the content of
@@ -130,12 +127,10 @@ answer:
 {self.memory.abstract_ex}\
 {self.criticise.abstract_ex}\
 {self.action_prompt.abstract_ex}\
-"""
-            )
+""")
 
         if self.flags.use_concrete_example:
-            prompt.add_text(
-                f"""
+            prompt.add_text(f"""
 # Concrete Example
 
 Here is a concrete example of how to format your answer.
@@ -145,8 +140,7 @@ Make sure to follow the template with proper tags:
 {self.memory.concrete_ex}\
 {self.criticise.concrete_ex}\
 {self.action_prompt.concrete_ex}\
-"""
-            )
+""")
         return self.obs.add_screenshot(prompt)
 
     def shrink(self):

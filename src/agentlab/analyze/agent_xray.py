@@ -177,7 +177,7 @@ def run_gradio(results_dir: Path):
     global info
     info.results_dir = results_dir
 
-    with gr.Blocks(theme=gr.themes.Soft(), css=css) as demo:
+    with gr.Blocks() as demo:
         agent_id = gr.State(value=None)
         episode_id = gr.State(value=EpisodeId())
         agent_task_id = gr.State(value=None)
@@ -186,8 +186,7 @@ def run_gradio(results_dir: Path):
         hidden_key_input = gr.Textbox(visible=False, elem_id="key_capture")
 
         with gr.Accordion("Help", open=False):
-            gr.Markdown(
-                """\
+            gr.Markdown("""\
 # Agent X-Ray
 
 1. **Select your experiment directory**. You may refresh the list of directories by
@@ -208,8 +207,7 @@ clicking the refresh button.
    information on the corresponding step.
 
 4. **Select a tab**: You can select different visualization by clicking on the tabs.
-"""
-            )
+""")
         with gr.Row():
             exp_dir_choice = gr.Dropdown(
                 choices=get_directory_contents(results_dir),
@@ -225,27 +223,23 @@ clicking the refresh button.
         with gr.Tabs():
             with gr.Tab("Select Agent"):
                 with gr.Accordion("Agent Selector (click for help)", open=False):
-                    gr.Markdown(
-                        """\
+                    gr.Markdown("""\
     Click on a row to select an agent. It will trigger the update of other
     fields.
     
     The update mechanism is somewhat flacky, please help figure out why (or is it just gradio?).
-    """
-                    )
+    """)
                 agent_table = gr.DataFrame(max_height=500, show_label=False, interactive=False)
             with gr.Tab("Select Task and Seed", id="Select Task"):
                 with gr.Row():
                     with gr.Column(scale=4):
                         with gr.Row():  # combining the title (help) and the refresh button
                             with gr.Accordion("Task Selector (click for help)", open=False):
-                                gr.Markdown(
-                                    """\
+                                gr.Markdown("""\
         Click on a row to select a task. It will trigger the update of other fields.
 
         The update mechanism is somewhat flacky, please help figure out why (or is it just gradio?).
-        """
-                                )
+        """)
                             refresh_results_button = gr.Button("↺", scale=0, size="sm")
 
                         task_table = gr.DataFrame(
@@ -257,13 +251,11 @@ clicking the refresh button.
 
                     with gr.Column(scale=2):
                         with gr.Accordion("Seed Selector (click for help)", open=False):
-                            gr.Markdown(
-                                """\
+                            gr.Markdown("""\
     Click on a row to select a seed. It will trigger the update of other fields.
 
     The update mechanism is somewhat flacky, please help figure out why (or is it just gradio?).
-    """
-                            )
+    """)
 
                         seed_table = gr.DataFrame(
                             max_height=500,
@@ -276,23 +268,19 @@ clicking the refresh button.
                 with gr.Row():
                     with gr.Column(scale=2):
                         with gr.Accordion("Constants", open=False):
-                            gr.Markdown(
-                                """\
+                            gr.Markdown("""\
     Constants are the parameters that are the same for **all** episodes of
     **all** agents. They are displayed as a table with the name and value of the
-    constant."""
-                            )
+    constant.""")
                         constants = gr.DataFrame(
                             max_height=500, show_label=False, interactive=False
                         )
                     with gr.Column(scale=2):
                         with gr.Accordion("Variables", open=False):
-                            gr.Markdown(
-                                """\
+                            gr.Markdown("""\
     Variables are the parameters that can change between episodes of an agent.
     They are displayed as a table with the name, value and count of unique
-    values. A maximum of 3 different values are displayed."""
-                            )
+    values. A maximum of 3 different values are displayed.""")
                         variables = gr.DataFrame(
                             max_height=500, show_label=False, interactive=False
                         )
@@ -300,26 +288,22 @@ clicking the refresh button.
                 global_stats = gr.DataFrame(max_height=500, show_label=False, interactive=False)
 
             with gr.Tab("Error Report"):
-                error_report = gr.Markdown(elem_classes="error-report", show_copy_button=True)
+                error_report = gr.Markdown(elem_classes="error-report", buttons=["copy"])
         with gr.Row():
             episode_info = gr.Markdown(label="Episode Info", elem_classes="my-markdown")
             action_info = gr.Markdown(label="Action Info", elem_classes="my-markdown")
             state_error = gr.Markdown(label="Next Step Error", elem_classes="my-markdown")
 
-        profiling_gr = gr.Image(
-            label="Profiling", show_label=False, interactive=False, show_download_button=False
-        )
+        profiling_gr = gr.Image(label="Profiling", show_label=False, interactive=False, buttons=[])
 
-        gr.HTML(
-            """
+        gr.HTML("""
 <style>
     .code-container {
         height: 700px;  /* Set the desired height */
         overflow: auto;  /* Enable scrolling */
     }
 </style>
-"""
-        )
+""")
         with gr.Tabs() as tabs:
             code_args = dict(interactive=False, elem_classes=["code-container"], show_label=False)
             with gr.Tab("Screenshot") as tab_screenshot:
@@ -332,22 +316,16 @@ clicking the refresh button.
                     interactive=True,
                     scale=0,
                 )
-                screenshot = gr.Image(
-                    show_label=False, interactive=False, show_download_button=False
-                )
+                screenshot = gr.Image(show_label=False, interactive=False, buttons=[])
 
             with gr.Tab("Screenshot Pair") as tab_screenshot_pair:
                 with gr.Row():
-                    screenshot1 = gr.Image(
-                        show_label=False, interactive=False, show_download_button=False
-                    )
-                    screenshot2 = gr.Image(
-                        show_label=False, interactive=False, show_download_button=False
-                    )
+                    screenshot1 = gr.Image(show_label=False, interactive=False, buttons=[])
+                    screenshot2 = gr.Image(show_label=False, interactive=False, buttons=[])
             with gr.Tab("Screenshot Gallery") as tab_screenshot_gallery:
                 screenshot_gallery = gr.Gallery(
                     columns=2,
-                    show_download_button=False,
+                    buttons=[],
                     show_label=False,
                     object_fit="contain",
                     preview=True,
@@ -379,12 +357,8 @@ clicking the refresh button.
 
             with gr.Tab("Agent Info HTML") as tab_agent_info_html:
                 with gr.Row():
-                    screenshot1_agent = gr.Image(
-                        show_label=False, interactive=False, show_download_button=False
-                    )
-                    screenshot2_agent = gr.Image(
-                        show_label=False, interactive=False, show_download_button=False
-                    )
+                    screenshot1_agent = gr.Image(show_label=False, interactive=False, buttons=[])
+                    screenshot2_agent = gr.Image(show_label=False, interactive=False, buttons=[])
                 agent_info_html = gr.HTML()
 
             with gr.Tab("Agent Info MD") as tab_agent_info_md:
@@ -547,7 +521,7 @@ clicking the refresh button.
     port = os.getenv("AGENTXRAY_APP_PORT", None)
     if isinstance(port, str):
         port = int(port)
-    demo.launch(server_port=port, share=do_share)
+    demo.launch(server_port=port, share=do_share, theme=gr.themes.Soft(), css=css)
 
 
 def handle_key_event(key_event, step_id: StepId):
@@ -643,7 +617,7 @@ def update_screenshot_gallery(som_or_not: str):
     gallery = gr.Gallery(
         value=screenshots_and_label,
         columns=2,
-        show_download_button=False,
+        buttons=[],
         show_label=False,
         object_fit="contain",
         preview=True,

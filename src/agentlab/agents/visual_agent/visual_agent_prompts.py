@@ -61,15 +61,13 @@ class History(dp.PromptElement):
         super().__init__()
         prompt_elements = []
         for i, (action, thought) in enumerate(zip(actions, thoughts)):
-            prompt_elements.append(
-                f"""
+            prompt_elements.append(f"""
 ## Step {i}
 ### Thoughts:
 {thought}
 ### Action:
 {action}
-"""
-            )
+""")
         self._prompt = "\n".join(prompt_elements) + "\n"
 
 
@@ -143,18 +141,15 @@ class MainPrompt(dp.PromptElement):
     @property
     def _prompt(self) -> HumanMessage:
         prompt = HumanMessage(self.instructions.prompt)
-        prompt.add_text(
-            f"""\
+        prompt.add_text(f"""\
 {self.obs.prompt}\
 {self.history.prompt}\
 {self.action_prompt.prompt}\
 {self.think.prompt}\
-"""
-        )
+""")
 
         if self.flags.use_abstract_example:
-            prompt.add_text(
-                f"""
+            prompt.add_text(f"""
 # Abstract Example
 
 Here is an abstract version of the answer with description of the content of
@@ -162,20 +157,17 @@ each tag. Make sure you follow this structure, but replace the content with your
 answer:
 {self.think.abstract_ex}\
 {self.action_prompt.abstract_ex}\
-"""
-            )
+""")
 
         if self.flags.use_concrete_example:
-            prompt.add_text(
-                f"""
+            prompt.add_text(f"""
 # Concrete Example
 
 Here is a concrete example of how to format your answer.
 Make sure to follow the template with proper tags:
 {self.think.concrete_ex}\
 {self.action_prompt.concrete_ex}\
-"""
-            )
+""")
         return self.obs.add_screenshot(prompt)
 
     def _parse_answer(self, text_answer):

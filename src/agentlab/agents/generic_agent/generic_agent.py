@@ -172,18 +172,14 @@ class GenericAgent(Agent):
         flags = self.flags
         if flags.obs.use_som:
             if not flags.obs.use_screenshot:
-                warn(
-                    """
-Warning: use_som=True requires use_screenshot=True. Disabling use_som."""
-                )
+                warn("""
+Warning: use_som=True requires use_screenshot=True. Disabling use_som.""")
                 flags.obs.use_som = False
         if flags.obs.use_screenshot:
             if not self.chat_model_args.vision_support:
-                warn(
-                    """
+                warn("""
 Warning: use_screenshot is set to True, but the chat model \
-does not support vision. Disabling use_screenshot."""
-                )
+does not support vision. Disabling use_screenshot.""")
                 flags.obs.use_screenshot = False
         return flags
 
